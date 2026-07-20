@@ -263,10 +263,11 @@ async function cmdHelp(interaction, bot) {
 /* ---- /ticket + ticket-paneel knoppen ---- */
 async function cmdTicket(interaction, bot) {
   const categories = bot?.modules?.tickets?.categories || [];
-  return createTicket(interaction, categories[0] || "Algemeen");
+  const first = categories[0];
+  return createTicket(interaction, first?.label || "Algemeen", first?.parentId || null);
 }
 
-async function createTicket(interaction, categoryLabel) {
+async function createTicket(interaction, categoryLabel, parentId) {
   await interaction.deferReply({ ephemeral: true });
   const bot = freshBot();
   const guild = interaction.guild;
@@ -279,12 +280,19 @@ async function createTicket(interaction, categoryLabel) {
     ...staffRoles.map((rid) => ({ id: rid, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] })),
   ];
 
-  const category = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /ticket/i.test(c.name));
+  // Gebruik de expliciet ingestelde Discord-categorie voor déze ticket-categorie.
+  // Is er niets ingesteld? Val terug op een kanaal-categorie met "ticket" in de naam,
+  // zodat dit ook zonder configuratie meteen werkt.
+  let parent = parentId;
+  if (!parent) {
+    const fallback = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /ticket/i.test(c.name));
+    parent = fallback?.id || undefined;
+  }
 
   const channel = await guild.channels.create({
     name: `ticket-${interaction.user.username}`.toLowerCase().slice(0, 90),
     type: ChannelType.GuildText,
-    parent: category ? category.id : undefined,
+    parent,
     permissionOverwrites: overwrites,
   });
 
@@ -557,8 +565,10 @@ async function handleButton(interaction) {
     const index = parseInt(id.replace("ticket_open_", ""), 10);
     const bot = freshBot();
     const categories = bot?.modules?.tickets?.categories || [];
-    const label = categories[index] || "Algemeen";
-    return createTicket(interaction, label);
+    const entry = categories[index];
+    const label = entry?.label || entry || "Algemeen";
+    const parentId = entry?.parentId || null;
+    return createTicket(interaction, label, parentId);
   }
 
   if (id === "giveaway_join") {

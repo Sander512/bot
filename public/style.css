@@ -192,6 +192,12 @@ h1.hero-title .accent{color:var(--signal);}
 .chip{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--line);border-radius:99px;padding:6px 8px 6px 12px;font-size:12.5px;}
 .chip button{background:none;border:none;color:var(--fog-dim);font-size:13px;line-height:1;padding:2px;}
 .chip button:hover{color:var(--red);}
+.ticket-cat-rows{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+.ticket-cat-row{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;}
+.ticket-cat-row .cat-label{flex:0 0 auto;min-width:120px;font-size:13px;font-weight:600;}
+.ticket-cat-row select{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:8px;font-size:12.5px;font-family:var(--font-mono);}
+.ticket-cat-row button{flex:none;background:none;border:none;color:var(--fog-dim);font-size:15px;padding:4px 6px;}
+.ticket-cat-row button:hover{color:var(--red);}
 .role-picker{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .role-option{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer;transition:.12s;}
 .role-option.selected{background:var(--signal-glow);border-color:var(--signal-dim);color:var(--signal);}

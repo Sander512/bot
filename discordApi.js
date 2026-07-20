@@ -91,6 +91,21 @@ async function getGuildChannels(token, guildId) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Kanaal-categorieën (de "mapjes" waar kanalen in gegroepeerd worden) van een server.
+// type 4 = GuildCategory. Gebruikt om per ticket-categorie een eigen Discord-categorie
+// te kunnen kiezen (zodat "Klachten"-tickets ergens anders komen dan "Sollicitatie"-tickets).
+async function getGuildCategories(token, guildId) {
+  const res = await fetch(`${API}/guilds/${guildId}/channels`, {
+    headers: { Authorization: `Bot ${token}` },
+  });
+  if (!res.ok) throw new Error("Kon de categorieën van deze server niet ophalen.");
+  const channels = await res.json();
+  return channels
+    .filter((c) => c.type === 4)
+    .map((c) => ({ id: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // Rollen van een server, opgevraagd met het bot-token (voor de staff-rol-kiezer).
 async function getGuildRoles(token, guildId) {
   const res = await fetch(`${API}/guilds/${guildId}/roles`, {
@@ -207,6 +222,7 @@ module.exports = {
   verifyBotToken,
   getBotGuilds,
   getGuildChannels,
+  getGuildCategories,
   getGuildRoles,
   getUserById,
   getBotFullProfile,

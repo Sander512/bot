@@ -148,6 +148,17 @@ router.get("/:id/guilds/:guildId/channels", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/:id/guilds/:guildId/categories", requireAuth, async (req, res) => {
+  const bot = accessibleBot(req, req.params.id);
+  if (!bot) return res.status(404).json({ error: "Bot niet gevonden." });
+  try {
+    const categories = await discord.getGuildCategories(db.getBotToken(bot.id), req.params.guildId);
+    res.json({ categories });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.get("/:id/guilds/:guildId/roles", requireAuth, async (req, res) => {
   const bot = accessibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ error: "Bot niet gevonden." });
@@ -257,7 +268,9 @@ router.post("/:id/ticket-panel", requireAuth, async (req, res) => {
   const bot = accessibleBot(req, req.params.id);
   if (!bot) return res.status(404).json({ error: "Bot niet gevonden." });
   const { channelId, title, description, categories } = req.body;
-  const cleanCategories = (categories || []).map((c) => c.trim()).filter(Boolean);
+  const cleanCategories = (categories || [])
+    .map((c) => ({ label: (c.label || "").trim(), parentId: c.parentId || null }))
+    .filter((c) => c.label);
   if (!channelId) return res.status(400).json({ error: "Kies een kanaal." });
   if (cleanCategories.length < 1) return res.status(400).json({ error: "Voeg minstens 1 categorie toe." });
 
@@ -268,7 +281,7 @@ router.post("/:id/ticket-panel", requireAuth, async (req, res) => {
     await discord.postTicketPanel(db.getBotToken(bot.id), channelId, {
       title: title || "Support & Vragen",
       description: description || "Open een ticket via een knop hieronder.",
-      categories: cleanCategories,
+      categories: cleanCategories.map((c) => c.label),
     });
     res.json({ ok: true });
   } catch (err) {

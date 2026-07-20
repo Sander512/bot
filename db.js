@@ -15,7 +15,12 @@ const DEFAULT_MODULES = {
   welcome: { enabled: false, guildId: null, channelId: null, message: "Welkom {user} op {server}! 🎉" },
   tickets: {
     enabled: false,
-    categories: ["Vragen?", "Klachten", "Sollicitatie / Overstap", "Owner Vraag"],
+    categories: [
+      { label: "Vragen?", parentId: null },
+      { label: "Klachten", parentId: null },
+      { label: "Sollicitatie / Overstap", parentId: null },
+      { label: "Owner Vraag", parentId: null },
+    ],
     panelTitle: "Support & Vragen",
     panelDescription: "Heb je een vraag, een probleem of wil je ergens over rapporteren? Open dan een ticket via een knop hieronder.",
   },
@@ -125,6 +130,12 @@ function getBot(id) {
   bot.collaborators = bot.collaborators || [];
   bot.staffRoleIds = bot.staffRoleIds || [];
   bot.modules = { ...JSON.parse(JSON.stringify(DEFAULT_MODULES)), ...(bot.modules || {}) };
+  // oudere installaties sloegen categorieën op als platte strings — normaliseren
+  if (bot.modules.tickets?.categories) {
+    bot.modules.tickets.categories = bot.modules.tickets.categories.map((c) =>
+      typeof c === "string" ? { label: c, parentId: null } : c
+    );
+  }
   return bot;
 }
 function userHasAccess(bot, userId) {
