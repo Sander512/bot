@@ -1,242 +1,311 @@
-# Notspayy's Hosting
+# Forever RP — Discord ↔ Roblox Integratie
 
-Een echt werkend platform om Discord bots te hosten en beheren via een dashboard:
-inloggen met je Discord-account, bots aan/uit zetten, en zelf slash-commands bouwen
-(met vaste reactie óf eigen JavaScript-code).
+Complete integratie tussen je Discord server en Forever Roleplay (Roblox), geïnspireerd op hoe Parcel werkt.
 
-Dit is **echte code** — geen mockup. Als je hem installeert en start, verbindt hij
-écht met de Discord API, logt gebruikers écht in via OAuth2, en start écht een
-Discord-bot-proces per bot die je toevoegt.
+```
+Discord → Discord Bot → Forever RP API (Node.js/Express + Turso/SQLite) → Roblox (HTTP polling)
+```
 
 ---
 
-## 1. Wat je nodig hebt
+## 📁 Projectstructuur
 
-- [Node.js](https://nodejs.org) versie 18 of hoger
-- Een gratis Discord-account
-- 5 minuten om een Discord-applicatie aan te maken
+```
+ForeverRP-Integration/
+├── bot/            Discord bot (discord.js v14)
+├── api/            Node.js/Express API + Turso (of lokaal SQLite-bestand)
+├── roblox/         ForeverIntegration.server.lua
+├── data/           Lokaal database bestand (alleen als je GEEN Turso gebruikt)
+├── .env.example
+└── package.json
+```
 
-## 2. Discord-applicatie aanmaken (voor de login)
+---
 
-1. Ga naar https://discord.com/developers/applications → **New Application**.
-2. Geef 'm een naam, bijv. "Notspayy's Hosting".
-3. Ga naar **OAuth2 → General**. Kopieer de **Client ID** en **Client Secret**.
-4. Klik bij **Redirects** op **Add Redirect** en vul exact in:
-   `http://localhost:3000/auth/discord/callback`
-   (pas de domeinnaam later aan als je live gaat, zie stap 6).
-5. Sla op.
+## 1. Node.js installeren
 
-Dit is de applicatie waarmee gebruikers *inloggen* op Notspayy's Hosting zelf — dit is **niet**
-dezelfde applicatie als de Discord bots die mensen later gaan toevoegen. Elke gebruiker
-maakt zijn eigen bot-applicatie (met eigen token) aan, zoals uitgelegd in stap 5.
+Download en installeer [Node.js LTS](https://nodejs.org/) (versie 18 of hoger). Controleer in PowerShell:
 
-## 3. Installeren
+```powershell
+node -v
+npm -v
+```
 
-```bash
-cd botcloud
+## 2. Project downloaden
+
+Pak het project uit of clone het naar een map, bijvoorbeeld:
+
+```powershell
+cd C:\Projects
+git clone <jouw-repo-url> ForeverRP-Integration
+cd ForeverRP-Integration
+```
+
+## 3. Dependencies installeren
+
+```powershell
 npm install
-cp .env.example .env
+```
+
+Dit installeert `discord.js`, `express`, `better-sqlite3`, `dotenv`, `helmet` en `express-rate-limit`.
+
+> Als `better-sqlite3` een build-fout geeft op Windows, installeer de Visual Studio Build Tools ("Desktop development with C++") en probeer opnieuw.
+
+## 4. `.env` aanmaken
+
+Kopieer het voorbeeldbestand:
+
+```powershell
+copy .env.example .env
 ```
 
 Open `.env` en vul in:
 
-```
-DISCORD_CLIENT_ID=<jouw client id uit stap 2>
-DISCORD_CLIENT_SECRET=<jouw client secret uit stap 2>
-DISCORD_CALLBACK_URL=http://localhost:3000/auth/discord/callback
-SESSION_SECRET=<verzin een lange willekeurige tekst>
-TOKEN_ENCRYPTION_KEY=<verzin nog een lange willekeurige tekst, 32 tekens>
-PORT=3000
+```env
+DISCORD_TOKEN=jouw-bot-token
+DISCORD_CLIENT_ID=jouw-applicatie-id
+DISCORD_GUILD_ID=jouw-server-id
+
+API_BASE_URL=http://localhost:3000
+API_KEY=een-lange-willekeurige-geheime-string
+API_PORT=3000
+
+TURSO_DATABASE_URL=
+TURSO_AUTH_TOKEN=
+DATABASE_PATH=./data/foreverrp.sqlite
+
+STAFF_ROLE_ID=discord-role-id-van-staff
+MANAGEMENT_ROLE_ID=discord-role-id-van-management
+AUDIT_LOG_CHANNEL_ID=discord-channel-id-voor-audit-logs
 ```
 
-Tip om willekeurige strings te genereren:
-```bash
+Genereer een sterke `API_KEY`, bijvoorbeeld in PowerShell:
+
+```powershell
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## 4. Starten
+### Database: Turso instellen (aanbevolen, gratis, overleeft redeploys)
 
-```bash
+Deze integratie gebruikt [Turso](https://turso.tech) — een gratis, gehoste SQLite-compatibele database. Zonder Turso (dus met alleen `DATABASE_PATH`) werkt alles ook, maar dan verlies je op hosts als Render al je data bij elke redeploy, tenzij je daar apart voor betaalt (Persistent Disk).
+
+1. Ga naar https://turso.tech en maak een gratis account
+2. Maak een nieuwe database aan (via hun dashboard of de `turso` CLI)
+3. Kopieer de **Database URL** (begint met `libsql://...`) → dit is `TURSO_DATABASE_URL`
+4. Genereer een **Auth Token** in het dashboard → dit is `TURSO_AUTH_TOKEN`
+5. Vul beide in bij je environment variables (lokaal in `.env`, op Render bij **Environment**)
+
+Zodra `TURSO_DATABASE_URL` is ingevuld, gebruikt de API automatisch Turso in plaats van een lokaal bestand — geen verdere codewijziging nodig. Laat je deze leeg, dan valt de app terug op het lokale `DATABASE_PATH`-bestand (prima voor lokaal testen, niet aan te raden voor productie op Render's gratis tier).
+
+## 5. Discord Developer Portal instellen
+
+1. Ga naar https://discord.com/developers/applications
+2. **New Application** → geef een naam (bv. "Forever RP")
+3. Ga naar **Bot** → **Add Bot**
+4. Kopieer de **Token** → dit is je `DISCORD_TOKEN`
+5. Ga naar **OAuth2 → General** → kopieer **Client ID** → dit is je `DISCORD_CLIENT_ID`
+6. Rechtsklik je Discord server (met Developer Mode aan) → **Copy Server ID** → dit is je `DISCORD_GUILD_ID`
+
+## 6. Bot permissions
+
+Ga naar **OAuth2 → URL Generator**:
+
+- Scopes: `bot`, `applications.commands`
+- Bot permissions: `Send Messages`, `Embed Links`, `Use Slash Commands`, `Kick Members` (optioneel, alleen als je wilt dat de bot ook Discord-acties uitvoert)
+
+Open de gegenereerde URL en nodig de bot uit op je server.
+
+## 7. Slash commands registreren
+
+```powershell
+npm run deploy
+```
+
+Je zou moeten zien: `14 slash commands succesvol geregistreerd.`
+
+## 8. API starten
+
+Open een **eerste** PowerShell-venster:
+
+```powershell
+npm run api
+```
+
+Je ziet: `[API] Forever RP API luistert op poort 3000`
+
+De database (`data/foreverrp.sqlite`) wordt automatisch aangemaakt met alle tabellen.
+
+## 9. Bot starten
+
+Open een **tweede** PowerShell-venster:
+
+```powershell
 npm start
 ```
 
-Ga naar `http://localhost:3000`. Log in met Discord, en je ziet je eigen dashboard.
+Je ziet: `Ingelogd als JouwBot#1234`
 
-## 5. Een bot toevoegen (voor je gebruikers)
+## 10. Roblox HTTP Requests inschakelen
 
-Om een bot te kunnen hosten heb je een **bot-token** nodig:
+In Roblox Studio:
 
-1. Ga (opnieuw) naar https://discord.com/developers/applications → **New Application**.
-   Dit keer is dit de applicatie die je wilt hosten, bijv. "RegelsBot".
-2. Ga naar **Bot** in het linkermenu → **Reset Token** → kopieer het token.
-3. Onder **Privileged Gateway Intents** hoef je voor de basis-functionaliteit
-   (alleen slash-commands) niets aan te zetten.
-4. Nodig de bot uit op je server via **OAuth2 → URL Generator**: vink `bot` en
-   `applications.commands` aan, kies de rechten die je bot nodig heeft, en open
-   de gegenereerde link.
-5. Plak het token in Notspayy's Hosting via **"+ Bot toevoegen"** op het dashboard.
-   Notspayy's Hosting controleert het token écht bij Discord en toont de botnaam — pas na
-   klikken op **"Activeren"** wordt de token opgeslagen en de bot gestart.
+1. Open je Forever RP place
+2. Ga naar **Home → Game Settings → Security**
+3. Zet **Allow HTTP Requests** aan
+4. Sla op
 
-## 6. Live zetten (echte hosting, 24/7)
+## 11. Roblox script installeren
 
-Op je eigen computer stopt de bot zodra je `npm start` afsluit. Voor "altijd online"
-zet je dit project op een server die continu aanstaat. Simpele opties:
+1. Kopieer `roblox/ForeverIntegration.server.lua`
+2. Plaats het als een **Script** (geen LocalScript!) in **ServerScriptService**
+3. Open het script en vul bovenaan in:
 
-- **Een VPS** (bijv. Hetzner, DigitalOcean, Contabo): installeer Node.js, zet dit
-  project erop, en start het met een process manager zoals
-  [`pm2`](https://pm2.keymetrics.io/) zodat het automatisch herstart:
-  ```bash
-  npm install -g pm2
-  pm2 start server.js --name botcloud
-  pm2 save
-  ```
-- **Railway / Render / Fly.io**: koppel je GitHub-repo, zet de `.env`-variabelen
-  in hun dashboard, en deploy.
-
-Vergeet niet de **Redirect URL** in je Discord-applicatie (stap 2.4) en
-`DISCORD_CALLBACK_URL` in `.env` aan te passen naar je echte domeinnaam
-(`https://botcloud.jouwdomein.nl/auth/discord/callback`).
-
-## 7. Hoe het technisch werkt
-
-```
-botcloud/
-├── server.js         Express-server: routing, sessies
-├── discordApi.js      Praat met Discord's REST API (OAuth2, tokens verifiëren)
-├── botManager.js       Start/stopt een apart Node-proces per bot (child_process.fork)
-├── botProcess.js        Draait ECHT als losstaand proces: verbindt met discord.js,
-│                        registreert slash-commands, voert ze uit
-├── db.js               Opslag in data/db.json (tokens versleuteld met AES-256-GCM)
-├── routes/
-│   ├── auth.js         /auth/discord, /auth/discord/callback, /auth/me
-│   ├── bots.js         /api/bots (lijst, verify, activate, start/stop/restart)
-│   └── commands.js     /api/bots/:id/commands (command builder)
-└── public/              Dashboard-frontend (praat met bovenstaande API's)
+```lua
+local Config = {
+    API_URL = "https://jouw-api-domein.com", -- of ngrok-URL tijdens testen
+    API_KEY = "dezelfde-key-als-in-.env",
+    ...
+}
 ```
 
-Elke bot die je activeert draait als een **eigen Node.js-proces**, gestart met
-`child_process.fork`. Zo kan het uitvallen van de ene bot niet de andere bots of de
-website zelf platleggen. Statusinformatie (online/RAM/uptime) stuurt elk bot-proces
-elke 5 seconden terug naar de hoofdserver.
+> **Let op:** tijdens lokaal testen is `localhost` niet bereikbaar vanuit Roblox. Gebruik een tool zoals [ngrok](https://ngrok.com/) om je lokale API tijdelijk publiek bereikbaar te maken: `ngrok http 3000`, en gebruik de `https://...ngrok-free.app` URL als `API_URL`.
 
-### Custom code-commands: belangrijke veiligheidsnotitie
+## 12. API-key instellen
 
-Bij "Eigen code" in de Command Builder draait de ingevoerde JavaScript in Node's
-ingebouwde `vm`-module met een timeout van 2 seconden. Dat is voldoende om per
-ongeluk oneindige loops of foute code onschadelijk te maken, maar **is geen volledige
-security-sandbox tegen moedwillig kwaadaardige code**. Als je dit platform openstelt
-voor mensen die je niet vertrouwt, bouw dan een steviger isolatiemodel, bijvoorbeeld:
+Zorg dat de `API_KEY` in `roblox/ForeverIntegration.server.lua` **exact** overeenkomt met `API_KEY` in je `.env`. Zonder deze match krijg je overal `401 Unauthorized`.
 
-- elk bot-proces in een eigen Docker-container met beperkte resources en geen
-  netwerktoegang behalve naar Discord;
-- of een library als [`isolated-vm`](https://www.npmjs.com/package/isolated-vm)
-  voor striktere JS-isolatie;
-- resource-limieten (CPU/geheugen) per container via bijv. Docker's `--memory`/`--cpus`.
+## 13. `/verify` testen
 
-### Database
+1. Typ in Discord: `/verify`
+2. Je krijgt een code zoals `FVR-A7B32C`
+3. Ga in-game naar de Roblox chat en typ: `/verify FVR-A7B32C`
+4. Typ in Discord `/userinfo` om te bevestigen dat de koppeling gelukt is
 
-`db.js` gebruikt op dit moment een simpel JSON-bestand (`data/db.json`). Dat werkt
-prima voor een klein aantal gebruikers. Bij groei vervang je dit door een echte
-database (Postgres, MySQL) — de rest van de app hoeft dan niet te veranderen zolang
-je dezelfde functienamen aanhoudt (`addBot`, `getBotsForUser`, enz.).
+## 14. `/online` testen
 
-## 8. Nieuwe functies: modules, staff-rollen, tickets, giveaways, polls, moderatie
+Typ `/online` in Discord. Je zou de huidige spelers en serverstatus moeten zien zodra de Roblox-server minstens 1 heartbeat heeft gestuurd (max. 5 seconden na opstarten).
 
-Op de **Beheren**-pagina (klik op ⚙ bij een bot) vind je nu vier tabbladen:
+## 15. `/give-money` testen
 
-### Tab "Modules"
-Zet losse functies aan/uit. Na een wijziging: **herstart de bot** zodat Discord de
-nieuwe slash-commands registreert.
+```
+/give-money discord:@JezelfOfTester bedrag:5000 rekening:Bank
+```
 
-- **Auto /help** — bouwt automatisch een overzicht van alle commands (custom + ingebouwd).
-- **Welkomstbericht** — kies een server + kanaal en typ een bericht met `{user}` erin.
-  Vereist dat je in je Discord-developer-portaal onder **Bot → Privileged Gateway
-  Intents** de **"Server Members Intent"** aanzet, anders ziet de bot geen nieuwe leden.
-- **Ticket-systeem** — `/ticket` maakt een privé-kanaal aan (zichtbaar voor de opener +
-  je staff-rollen), met een 🔒 sluit-knop.
-- **Giveaways** — `/giveaway prijs:... duur:10m winnaars:1` post een giveaway met een
-  meedoen-knop; na het verstrijken van de tijd kiest de bot automatisch winnaars.
-- **Polls** — `/poll vraag:... opties:Ja,Nee,Misschien` post een stemming met knoppen
-  en live bijgewerkte resultaten.
-- **Moderatie-commands** — `/ban`, `/kick`, `/timeout`, `/giverole`, `/removerole`,
-  `/allroles` — werken alleen voor wie een staff-rol heeft (of Administrator-rechten).
-- **/reload** — herstart de bot vanuit Discord zelf (alleen server-admins).
+Controleer in-game of de `Bank`-waarde van de speler is aangepast (kan tot 3 seconden duren door de polling-interval).
 
-### Tab "Staff & Toegang"
-- Kies een server en vink de rollen aan die "staff" zijn — die rollen mogen
-  moderatie-commands en tickets gebruiken.
-- **Collaborators**: voeg iemand toe via zijn/haar **Discord ID** (rechtsklik op
-  iemands naam in Discord → "ID kopiëren", vereist Developer Mode aan in Discord-
-  instellingen). Die persoon kan daarna ook inloggen op Notspayy's Hosting en deze bot zien en
-  beheren (starten/stoppen, commands, modules) — alleen de eigenaar kan de bot
-  verwijderen of collaborators toevoegen/verwijderen.
+## 16. `/setjob` testen
 
-### Tab "Logs"
-- Kies een server + kanaal waar gebeurtenissen (zoals nieuwe tickets) naartoe gestuurd
-  worden.
-- Onderaan zie je de live console-output van het bot-proces sinds de laatste start.
+```
+/setjob discord:@Speler job:police niveau:3
+```
 
-### Commands bewerken
-In de tab "Commands" kun je nu ook op **"Bewerken"** klikken bij een bestaand command
-om het aan te passen, in plaats van alleen te kunnen verwijderen.
+Typ tijdens het invullen van `job:` een stukje van de naam (bv. "poli" of "gang_g") — Discord toont dan live suggesties uit de volledige lijst. Dit zet de gekozen job-`IntValue` in de `Jobs`-folder van de speler op het opgegeven niveau, en zet alle andere jobs terug naar 0 (net als je bestaande in-game commando).
 
-### Altijd online zolang de website online is
-Zolang het `node server.js`-proces (of je Render-service) draait, blijft elke
-geactiveerde bot online — crasht een bot-proces onverwacht, dan herstart Notspayy's Hosting 'm
-automatisch na 2 seconden. Gebruik je `/reload` in Discord, dan herstart alleen die
-ene bot binnen ~1 seconde.
+## 17. `/setrank` testen
 
-### Ingelogd blijven
-Je Discord-login wordt 30 dagen onthouden (cookie-sessie) — je hoeft dus niet elke
-keer opnieuw in te loggen.
+```
+/setrank discord:@Speler rank:5
+```
 
-## 9. Nog meer nieuw: eigen naam, ticket-panelen, native polls, bot-profiel, super-admin
+## 18. `/ban` testen
 
-- **Naam veranderd** naar "Notspayy's Hosting" (overal in de website aangepast).
-- **Watermark**: giveaway-, ticket- en /help-embeds tonen nu "Notspayy's Hosting" onderaan.
-- **Ticket-paneel** (tab Modules → Ticket-systeem): stel een titel, omschrijving en
-  meerdere categorieën in (bijv. "Vragen?", "Klachten", "Sollicitatie / Overstap",
-  "Owner Vraag" — zoals bij bekende support-bots) en klik op **"Plaats paneel in
-  kanaal"**. De bot post een embed met een knop per categorie; elke knop opent een
-  eigen privé-ticket met die categorie in de titel.
-- **Giveaways** ondersteunen nu ook een vereiste rol en een sponsor(-link), rechtstreeks
-  als opties bij `/giveaway` in Discord.
-- **Polls zijn nu Discord's eigen native poll-systeem** (niet meer knoppen die wij zelf
-  bijhielden) — `/poll` gebruikt de ingebouwde Discord-stemfunctie, inclusief de
-  duur-in-uren en "meerdere antwoorden toestaan"-opties.
-- **Bot-profiel** (nieuwe tab): pas de echte Discord-naam, avatar en bio ("About Me")
-  van je bot aan, direct vanuit de website. Let op: Discord staat maar een beperkt
-  aantal naamswijzigingen per uur toe.
-- **Extra utility-commands** (tab Modules): `/avatar` en `/serverinfo`.
-- **Welkomstbericht-placeholders** uitgebreid: `{user}` (vermelding), `{username}`
-  (naam zonder vermelding), `{server}` (servernaam), `{membercount}` (aantal leden).
-- **Bugfix**: het gekozen kanaal voor het welkomstbericht (en de bijbehorende server)
-  blijven nu correct staan na het herladen van de pagina.
-- **Logkanaal meldt nu ook start/stop/herstart**: elke keer dat een bot online komt,
-  gestopt wordt, crasht-en-herstart, of via `/reload` herstart, komt er een bericht in
-  je logkanaal (als je er een hebt ingesteld).
-- **Super-admin**: het Discord-ID `1179804729254105210` heeft op deze installatie
-  altijd volledige toegang tot élke bot (ook van andere gebruikers) — kan starten,
-  stoppen, verwijderen, collaborators beheren, alles. Wil je dit aanpassen of
-  uitzetten? Zet in `.env` een regel `SUPER_ADMIN_IDS=jouw_id,nog_een_id` (of laat 'm
-  leeg/weg voor het standaard-ID). **Let op:** geef dit alleen aan Discord-ID's die je
-  volledig vertrouwt — deze persoon kan alles op je hele installatie beheren.
+```
+/ban discord:@Speler reden:Test
+```
 
-## 10. Command Builder gebruiken
+De speler wordt gekickt met de opgegeven reden. Bij een nieuwe join-poging wordt de speler direct geweerd (via `IsBanned` check).
 
-- **Simpele reactie**: vul een command-naam (`/regels`), beschrijving, cooldown en
-  een vaste tekst in. De bot antwoordt exact met die tekst.
-- **Eigen code**: schrijf JavaScript dat de variabele `interaction` gebruikt, bijv.:
-  ```js
-  interaction.reply({
-    content: "Bekijk onze regels in #regels!"
-  });
-  ```
-- Na het opslaan van een command: **herstart de bot** (knop op het dashboard) zodat
-  het nieuwe command bij Discord geregistreerd wordt.
+## 19. Productiehosting
+
+Voor productie:
+
+- Host de API op een VPS (bv. via [Hetzner](https://www.hetzner.com/), [DigitalOcean](https://www.digitalocean.com/), of een ander platform naar keuze)
+- Gebruik een process manager zoals [PM2](https://pm2.keymetrics.io/) om de bot en API 24/7 te laten draaien:
+
+```powershell
+npm install -g pm2
+pm2 start api/server.js --name foreverrp-api
+pm2 start bot/index.js --name foreverrp-bot
+pm2 save
+```
+
+**Host je liever op [Render](https://render.com)?** Gebruik dan `start.js` als Start Command (`node start.js`) — dat draait bot + API in 1 proces, wat nodig is omdat Render's gratis/goedkope Web Service maar 1 draaiend proces per service toestaat. Zorg dat `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` zijn ingevuld (zie stap 4) zodat je data niet verloren gaat bij redeploys — Render's eigen schijf is namelijk niet persistent tenzij je apart voor een Persistent Disk betaalt.
+
+## 20. HTTPS
+
+Roblox `HttpService` vereist HTTPS in productie. Gebruik bijvoorbeeld:
+
+- [Caddy](https://caddyserver.com/) of [nginx](https://nginx.org/) als reverse proxy met een gratis Let's Encrypt certificaat
+- Of een managed platform dat automatisch HTTPS regelt
+
+Zorg dat `API_URL` in het Roblox script en `API_BASE_URL` in `.env` de `https://` URL gebruiken.
+
+## 21. Security
+
+- **Nooit** je `.env` bestand committen naar Git (staat al in `.gitignore`)
+- Roteer je `API_KEY` als je vermoedt dat deze gelekt is
+- Zet `Allow HTTP Requests` alleen aan, gebruik geen andere onveilige Studio-instellingen
+- Gebruik een sterke, unieke `API_KEY` (minimaal 32 random bytes, zie stap 4)
+- Beperk toegang tot je API-server met een firewall waar mogelijk (alleen Roblox' IP-ranges en jouw eigen server, indien haalbaar)
+- Controleer regelmatig de `audit_logs` tabel voor verdachte activiteit
 
 ---
 
-Veel plezier met Notspayy's Hosting. Vragen over uitbreidingen (bijv. betaalde abonnementen,
-meerdere servers per bot, logs-pagina) — laat het weten.
+## ✅ Testchecklist
+
+```
+[ ] Bot online
+[ ] API online
+[ ] Database aangemaakt (data/foreverrp.sqlite bestaat)
+[ ] Slash commands zichtbaar in Discord
+[ ] /verify werkt (code ontvangen)
+[ ] Roblox verificatie werkt (/verify FVR-XXXXXX in-game)
+[ ] /userinfo werkt
+[ ] /give-money werkt (bedrag verandert in-game)
+[ ] /setjob werkt (job + niveau, incl. autocomplete-suggesties)
+[ ] /setrank werkt
+[ ] /online werkt (toont spelers/servers)
+[ ] /announce werkt (bericht verschijnt in-game)
+[ ] /shutdown werkt (aankondiging + kick na countdown)
+[ ] /checkverify werkt (toont lijst of bestand met geverifieerde accounts)
+[ ] /ban werkt (speler wordt gekickt + geweerd bij herjoin)
+[ ] Audit logs werken (embeds in AUDIT_LOG_CHANNEL_ID)
+```
+
+---
+
+## 🧩 Nieuwe commands toevoegen
+
+Dankzij de generieke command-queue-architectuur (`api/routes/commands.js` + `roblox/ForeverIntegration.server.lua` → `CommandHandlers`) voeg je een nieuw admin-command in 3 stappen toe:
+
+1. **API:** voeg het type toe aan `ALLOWED_COMMAND_TYPES` in `api/utils/validate.js` en schrijf een `case` in `validatePayload()` in `api/routes/commands.js`.
+2. **Roblox:** voeg een nieuwe functie toe aan `CommandHandlers` in `ForeverIntegration.server.lua`.
+3. **Bot:** maak een nieuw bestand in `bot/commands/` naar het patroon van bijvoorbeeld `setjob.js`, en voeg het toe aan `MANAGEMENT_COMMANDS` of `STAFF_COMMANDS` in `bot/utils/permissions.js`.
+
+Geplande uitbreidingen zoals `/give-item`, `/setxp`, `/whitelist` passen allemaal in dit patroon zonder de kernqueue aan te passen.
+
+---
+
+## 🧑‍💼 Job-lijst synchroon houden
+
+Je jobsysteem (incl. gangs) draait op een `Jobs`-folder onder elke Player met een `IntValue` per job — precies zoals je bestaande `setjobconfig` ModuleScript dat al opzet. Er zijn nu **3 plekken** met dezelfde lijst:
+
+1. **`ServerScriptService.setjobconfig`** (in Roblox Studio) — de echte bron van waarheid, hier maakt je game de daadwerkelijke `IntValue`-objecten aan.
+2. **`roblox/ForeverIntegration.server.lua`** → `Config.AllowedJobs` — whitelist die de integratie gebruikt om te checken of een job geldig is voordat hij 'm instelt.
+3. **`shared/jobs.js`** — dezelfde lijst, gebruikt door de bot (autocomplete + validatie) en de API (validatie).
+
+**Voeg je een nieuwe job toe?** Doe dat in `setjobconfig` zoals gewoonlijk, en kopieer dezelfde exacte naam (hoofdlettergevoelig!) naar zowel `Config.AllowedJobs` in het Lua-script als de `JOBS`-array in `shared/jobs.js`. Vergeet je dit, dan werkt `/setjob` voor die job niet (de bot/API wijst 'm af vóórdat hij ooit bij Roblox komt).
+
+---
+
+## 🔐 Hoe de security werkt
+
+| Laag | Bescherming |
+|---|---|
+| Discord → Bot | Discord's eigen OAuth + permission-systeem |
+| Bot → API | `X-API-Key` header, verplicht op alle routes behalve `/health` |
+| API | Helmet security headers, rate limiting (120 req/min globaal), strikte input-validatie op elk veld (Discord ID's, Roblox ID's, bedragen, jobs, gangs) |
+| API → Roblox | Command queue met polling — Roblox voert nooit willekeurige code uit, alleen vooraf gedefinieerde `CommandHandlers` |
+| Command queue | Elk command heeft een expiratie (5 min), status-machine (`pending → processing → completed/failed/expired`) voorkomt dubbele uitvoering |
+| Verificatiecodes | Cryptografisch veilig gegenereerd (`crypto.randomBytes`), 10 minuten geldig, eenmalig bruikbaar |
+| Roblox script | Uitsluitend server-side (Script, geen LocalScript) — de API-key is nooit clientside zichtbaar |
