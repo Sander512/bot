@@ -25,6 +25,11 @@ const ALLOWED_COMMAND_TYPES = new Set([
   'give_coins',
   'give_pack',
   'check_money',
+  'set_xp',
+  'give_vehicle',
+  'remove_vehicle',
+  'check_inventory',
+  'check_stats',
 ]);
 
 const ALLOWED_ACCOUNTS = new Set(['Contant', 'Bank']);

@@ -40,6 +40,26 @@ module.exports = {
           }
         );
 
+      try {
+        const [{ activeCount, total: totalWarnings }, { notes }] = await Promise.all([
+          api.getWarnings(target.id),
+          api.getNotes(target.id),
+        ]);
+
+        if (totalWarnings > 0) {
+          embed.addFields({ name: '⚠️ Waarschuwingen', value: `${activeCount} actief / ${totalWarnings} totaal (\`/warnings\` voor details)` });
+        }
+        if (notes.length > 0) {
+          const preview = notes
+            .slice(0, 3)
+            .map((n) => `• ${n.note} — <@${n.staffId}>`)
+            .join('\n');
+          embed.addFields({ name: `📝 Staff-notities (${notes.length})`, value: preview + (notes.length > 3 ? `\n...en ${notes.length - 3} meer` : '') });
+        }
+      } catch {
+        // Non-fatal — userinfo still works without the warnings/notes enrichment.
+      }
+
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       await interaction.editReply({

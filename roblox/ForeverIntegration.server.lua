@@ -95,6 +95,35 @@ local Config = {
 		"gang_narcos", "gang_lafamilia", "gang_young",
 		"union", "Hitman", "hellokitty", "Onderwereld",
 	},
+
+	-- ============================================================
+	-- XP
+	-- ============================================================
+	XpValueName = "XP", -- NumberValue/IntValue direct onder de Player
+
+	-- ============================================================
+	-- WHITELIST
+	-- Zet op true om alleen spelers op de whitelist (via /whitelist add
+	-- in Discord) toe te laten. Staat standaard UIT zodat dit niets
+	-- breekt totdat je het bewust inschakelt.
+	-- ============================================================
+	WhitelistEnabled = false,
+
+	-- ============================================================
+	-- STAFF DIENST
+	-- Naam van de BoolValue onder de Player die aan/uit gaat wanneer een
+	-- staff-lid het staffvest aan/uit doet (zoals in je bestaande
+	-- StaffPanel/hesje-script). Wordt hier alleen UITGELEZEN, niet
+	-- aangemaakt of gewijzigd — dat blijft je eigen script doen.
+	-- ============================================================
+	StaffDutyValueName = "Staffdienst",
+
+	-- ============================================================
+	-- STATS REPORTING (voor /playerstats en /leaderboard)
+	-- ============================================================
+	StatsReportInterval = 60, -- seconden tussen elke stats-snapshot per online speler
+	XpForStatsValueName = "XP", -- zelfde als XpValueName, apart configureerbaar mocht dat ooit verschillen
+	PlaytimeValueName = "Playtime", -- optioneel: IntValue (in minuten) onder Player, indien aanwezig
 }
 
 ----------------------------------------------------------------
@@ -329,6 +358,61 @@ CommandHandlers["set_rank"] = function(player, payload)
 end
 
 ----------------------------------------------------------------
+-- XP
+----------------------------------------------------------------
+
+CommandHandlers["set_xp"] = function(player, payload)
+	local xpValue = player:FindFirstChild(Config.XpValueName)
+	if not xpValue then
+		warn(("[ForeverIntegration] '%s' object niet gevonden onder Player — pas Config.XpValueName aan."):format(
+			Config.XpValueName
+		))
+		return false, "XP object niet gevonden"
+	end
+
+	local amount = tonumber(payload.amount)
+	if not amount or amount < 0 then
+		return false, "Ongeldige XP-waarde"
+	end
+
+	xpValue.Value = amount
+	return true, "XP ingesteld op " .. tostring(amount)
+end
+
+----------------------------------------------------------------
+-- VOERTUIGEN
+-- Verwacht dezelfde _G-hook stijl als de Ox_Inventory integratie
+-- (_G.OxGiveItem). Koppel _G.OxGiveVehicle / _G.OxRemoveVehicle aan je
+-- eigen voertuigsysteem.
+----------------------------------------------------------------
+
+CommandHandlers["give_vehicle"] = function(player, payload)
+	if not _G.OxGiveVehicle then
+		return false, "_G.OxGiveVehicle niet beschikbaar (voertuigsysteem-hook nog niet gekoppeld)"
+	end
+
+	local ok, message = _G.OxGiveVehicle(player, payload.vehicle)
+	if ok == false then
+		return false, message or "Voertuigsysteem gaf false terug"
+	end
+
+	return true, ("Voertuig '%s' gegeven"):format(payload.vehicle)
+end
+
+CommandHandlers["remove_vehicle"] = function(player, payload)
+	if not _G.OxRemoveVehicle then
+		return false, "_G.OxRemoveVehicle niet beschikbaar (voertuigsysteem-hook nog niet gekoppeld)"
+	end
+
+	local ok, message = _G.OxRemoveVehicle(player, payload.vehicle)
+	if ok == false then
+		return false, message or "Voertuigsysteem gaf false terug"
+	end
+
+	return true, ("Voertuig '%s' verwijderd"):format(payload.vehicle)
+end
+
+----------------------------------------------------------------
 -- JUMPSCARE
 ----------------------------------------------------------------
 
@@ -548,6 +632,68 @@ CommandHandlers["check_money"] = function(player, payload)
 	return true, table.concat(parts, " | ")
 end
 
+----------------------------------------------------------------
+-- CHECK INVENTORY (read-back command)
+----------------------------------------------------------------
+
+CommandHandlers["check_inventory"] = function(player, payload)
+	if not _G.OxGetSession then
+		return false, "Ox_Inventory _G functies niet beschikbaar (script niet geladen?)"
+	end
+
+	local session = _G.OxGetSession(player)
+	if not session then
+		return false, "Geen actieve Ox inventory sessie voor deze speler"
+	end
+
+	local parts = {}
+	for _, item in pairs(session.inventory) do
+		if type(item) == "table" and item.Name then
+			table.insert(parts, ("%dx %s"):format(item.Count or 1, item.Name))
+		end
+	end
+
+	if #parts == 0 then
+		return true, "Inventory is leeg"
+	end
+
+	-- /roblox/complete truncates result to 1000 chars — keep it well under that.
+	local text = table.concat(parts, ", ")
+	if #text > 900 then
+		text = text:sub(1, 900) .. "... (afgekapt)"
+	end
+
+	return true, text
+end
+
+----------------------------------------------------------------
+-- CHECK STATS (read-back command, used by /playerstats as a live fallback)
+----------------------------------------------------------------
+
+CommandHandlers["check_stats"] = function(player, payload)
+	local parts = {}
+
+	local economy = player:FindFirstChild("Economy")
+	if economy then
+		local contant = economy:FindFirstChild(Config.EconomyContantValueName)
+		if contant then table.insert(parts, ("Contant: %d"):format(contant.Value)) end
+		local bank = economy:FindFirstChild(Config.EconomyBankValueName)
+		if bank then table.insert(parts, ("Bank: %d"):format(bank.Value)) end
+	end
+
+	local xp = player:FindFirstChild(Config.XpValueName)
+	if xp then table.insert(parts, ("XP: %d"):format(xp.Value)) end
+
+	local playtime = player:FindFirstChild(Config.PlaytimeValueName)
+	if playtime then table.insert(parts, ("Playtime: %d min"):format(playtime.Value)) end
+
+	if #parts == 0 then
+		return false, "Geen stats-waardes gevonden"
+	end
+
+	return true, table.concat(parts, " | ")
+end
+
 CommandHandlers["kick"] = function(player, payload)
 	local reason = payload.reason or "Gekickt door management"
 	player:Kick("Forever RP: " .. reason)
@@ -659,6 +805,20 @@ local function isBanned(userId)
 	return result.banned == true, result.reason
 end
 
+----------------------------------------------------------------
+-- WHITELIST CHECK ON JOIN (only enforced when Config.WhitelistEnabled = true)
+----------------------------------------------------------------
+
+local function isWhitelisted(userId)
+	local result = apiRequest("GET", "/whitelist/status/" .. tostring(userId), nil)
+	if not result then
+		-- Fail open — same reasoning as isBanned above: don't lock out the
+		-- whole server if the API is briefly unreachable.
+		return true
+	end
+	return result.whitelisted == true
+end
+
 local function banPlayer(player, reason)
 	player:Kick("Forever RP: Je bent gebanned. Reden: " .. tostring(reason or "Geen reden opgegeven"))
 end
@@ -668,6 +828,11 @@ Players.PlayerAdded:Connect(function(player)
 		local banned, reason = isBanned(player.UserId)
 		if banned then
 			banPlayer(player, reason)
+			return
+		end
+
+		if Config.WhitelistEnabled and not isWhitelisted(player.UserId) then
+			player:Kick("Forever RP: Je staat niet op de whitelist. Neem contact op met staff.")
 		end
 	end)
 end)
@@ -710,6 +875,77 @@ Players.PlayerAdded:Connect(function(player)
 	player.Chatted:Connect(function(message)
 		handleVerifyChat(player, message)
 	end)
+end)
+
+----------------------------------------------------------------
+-- STAFF DIENST TRACKING (voor /staffactivity)
+----------------------------------------------------------------
+-- Luistert naar de bestaande "Staffdienst" BoolValue die je eigen
+-- hesje-script (aan/uit knop) al onder de Player zet/toggelt. Dit script
+-- MAAKT of WIJZIGT die waarde niet — het rapporteert alleen elke
+-- verandering naar de API, zodat /staffactivity live kan meekijken.
+
+local function reportStaffDuty(player, onDuty)
+	apiRequest("POST", "/staff-duty/toggle", {
+		robloxId = tostring(player.UserId),
+		robloxUsername = player.Name,
+		onDuty = onDuty,
+	})
+end
+
+local function watchStaffDuty(player)
+	local staffDutyValue = player:WaitForChild(Config.StaffDutyValueName, 10)
+	if not staffDutyValue or not staffDutyValue:IsA("BoolValue") then
+		return -- speler heeft geen staff-toegang / waarde nog niet aangemaakt
+	end
+
+	reportStaffDuty(player, staffDutyValue.Value) -- rapporteer initiële status (meestal false bij join)
+
+	staffDutyValue.Changed:Connect(function(newValue)
+		reportStaffDuty(player, newValue)
+	end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+	task.spawn(watchStaffDuty, player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	-- Veiligheidsnet: als een staff-lid de server verlaat terwijl hij/zij nog
+	-- in dienst staat, sluit de dienst-sessie hier alsnog af.
+	reportStaffDuty(player, false)
+end)
+
+----------------------------------------------------------------
+-- STATS REPORTING (voor /playerstats en /leaderboard)
+----------------------------------------------------------------
+-- Rapporteert periodiek een snapshot van elke online speler, zodat de
+-- Discord-kant deze data kan tonen zonder de speler live te hoeven pollen.
+
+local function reportPlayerStats(player)
+	local economy = player:FindFirstChild("Economy")
+	local cash = economy and economy:FindFirstChild(Config.EconomyContantValueName)
+	local bank = economy and economy:FindFirstChild(Config.EconomyBankValueName)
+	local xp = player:FindFirstChild(Config.XpForStatsValueName)
+	local playtime = player:FindFirstChild(Config.PlaytimeValueName)
+
+	apiRequest("POST", "/player-stats/report", {
+		robloxId = tostring(player.UserId),
+		robloxUsername = player.Name,
+		cash = cash and cash.Value or 0,
+		bank = bank and bank.Value or 0,
+		xp = xp and xp.Value or 0,
+		playtimeMinutes = playtime and playtime.Value or 0,
+	})
+end
+
+task.spawn(function()
+	while true do
+		task.wait(Config.StatsReportInterval)
+		for _, player in ipairs(Players:GetPlayers()) do
+			reportPlayerStats(player)
+		end
+	end
 end)
 
 ----------------------------------------------------------------

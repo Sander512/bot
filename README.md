@@ -274,6 +274,31 @@ Zorg dat `API_URL` in het Roblox script en `API_BASE_URL` in `.env` de `https://
 
 ---
 
+---
+
+## 🆕 Nieuwe features
+
+Deze zijn toegevoegd bovenop de oorspronkelijke set:
+
+| Command | Wat |
+|---|---|
+| `/setxp` | Stel de XP van een speler in (`Config.XpValueName`, standaard `"XP"`) |
+| `/whitelist add\|remove\|list` | Join-whitelist. **Staat standaard uit** — zet `Config.WhitelistEnabled = true` in `ForeverIntegration.server.lua` om te activeren |
+| `/give-vehicle` / `/remove-vehicle` | Geef/verwijder een voertuig. Vul eerst `shared/vehicles.js` met je eigen voertuignamen en koppel `_G.OxGiveVehicle` / `_G.OxRemoveVehicle` aan je voertuigsysteem (zelfde stijl als `_G.OxGiveItem`) |
+| `/inventory` | Toon de Ox inventory van een speler (read-back, speler moet online zijn) |
+| `/playerstats` | Toon cash/bank/XP/playtime — leest uit periodieke snapshots, werkt ook als de speler offline is |
+| `/leaderboard` | Top 10 op cash, bank, XP of playtime |
+| `/warn` + `/warnings` | Waarschuwingssysteem los van bans, zichtbaar in `/userinfo` |
+| `/note` | Vrije staff-notitie aan een speler, zichtbaar in `/userinfo` |
+| `/staffactivity` | Wie is nu in staffdienst + een dienst-tijd leaderboard — leest de bestaande `Staffdienst` BoolValue die je hesje-script al toggelt, zonder dat script te hoeven aanpassen |
+| `/healthcheck` | Status van API, database en command-wachtrij in één oogopslag |
+
+**Audit-logkanalen per categorie:** stel `AUDIT_LOG_CHANNEL_ECONOMY`, `AUDIT_LOG_CHANNEL_MODERATION` en/of `AUDIT_LOG_CHANNEL_STAFF` in om die acties naar een apart kanaal te sturen. Elke categorie die je leeg laat valt terug op `AUDIT_LOG_CHANNEL_ID`.
+
+**Stats reporting:** elke `Config.StatsReportInterval` seconden (standaard 60) rapporteert elke online speler zijn cash/bank/XP/playtime naar de API — dit voedt `/playerstats` en `/leaderboard`. Er hoeft niets aan je bestaande economy-objecten te veranderen; als een waarde (bv. `Playtime`) niet bestaat, wordt gewoon `0` gerapporteerd voor dat veld.
+
+---
+
 ## 🧩 Nieuwe commands toevoegen
 
 Dankzij de generieke command-queue-architectuur (`api/routes/commands.js` + `roblox/ForeverIntegration.server.lua` → `CommandHandlers`) voeg je een nieuw admin-command in 3 stappen toe:

@@ -182,6 +182,73 @@ CREATE TABLE IF NOT EXISTS giveaways (
   ended_at INTEGER
 );
 
+-- ---- Warnings ----
+-- A moderation history separate from bans: staff can log a warning against
+-- a player without kicking/banning them. Stored against both IDs so it
+-- still shows up even if the Discord<->Roblox link changes later.
+CREATE TABLE IF NOT EXISTS warnings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  discord_id TEXT NOT NULL,
+  roblox_id TEXT,
+  reason TEXT NOT NULL,
+  staff_id TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+
+-- ---- Staff notes ----
+-- Free-form notes staff can attach to a player's Discord/Roblox account,
+-- surfaced in /userinfo. Not a punishment log (see warnings for that).
+CREATE TABLE IF NOT EXISTS player_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  discord_id TEXT NOT NULL,
+  roblox_id TEXT,
+  note TEXT NOT NULL,
+  staff_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- ---- Whitelist ----
+-- Optional join-gate: when enabled in the Roblox script (Config.WhitelistEnabled),
+-- only Roblox accounts in this table may stay in the game.
+CREATE TABLE IF NOT EXISTS whitelist (
+  roblox_id TEXT PRIMARY KEY,
+  roblox_username TEXT,
+  discord_id TEXT,
+  added_by TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- ---- Staff duty tracking ----
+-- One row per Roblox account. Populated by the Roblox script watching the
+-- existing "Staffdienst" BoolValue (the in-game staff-vest toggle) and
+-- reporting every change here, so /staffactivity can show who's on duty
+-- right now plus a lifetime duty-time leaderboard.
+CREATE TABLE IF NOT EXISTS staff_duty (
+  roblox_id TEXT PRIMARY KEY,
+  roblox_username TEXT,
+  discord_id TEXT,
+  on_duty INTEGER NOT NULL DEFAULT 0,
+  duty_started_at INTEGER,
+  total_duty_seconds INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
+-- ---- Player stats snapshot ----
+-- Refreshed periodically by the Roblox script (one report per online player,
+-- similar in spirit to the server heartbeat) so /playerstats and
+-- /leaderboard don't need every player online at query time.
+CREATE TABLE IF NOT EXISTS player_stats (
+  roblox_id TEXT PRIMARY KEY,
+  roblox_username TEXT,
+  discord_id TEXT,
+  cash INTEGER NOT NULL DEFAULT 0,
+  bank INTEGER NOT NULL DEFAULT 0,
+  xp INTEGER NOT NULL DEFAULT 0,
+  playtime_minutes INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_accounts_roblox_id ON accounts(roblox_id);
 CREATE INDEX IF NOT EXISTS idx_commands_roblox_id_status ON commands(roblox_id, status);
 CREATE INDEX IF NOT EXISTS idx_bans_roblox_id_active ON bans(roblox_id, active);
@@ -190,6 +257,11 @@ CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status)
 CREATE INDEX IF NOT EXISTS idx_tickets_opener_status ON tickets(opener_id, status);
 CREATE INDEX IF NOT EXISTS idx_giveaways_status ON giveaways(status, ends_at);
 CREATE INDEX IF NOT EXISTS idx_giveaways_guild ON giveaways(guild_id, status);
+CREATE INDEX IF NOT EXISTS idx_warnings_discord ON warnings(discord_id, active);
+CREATE INDEX IF NOT EXISTS idx_notes_discord ON player_notes(discord_id);
+CREATE INDEX IF NOT EXISTS idx_staff_duty_on_duty ON staff_duty(on_duty);
+CREATE INDEX IF NOT EXISTS idx_player_stats_cash ON player_stats(cash);
+CREATE INDEX IF NOT EXISTS idx_player_stats_playtime ON player_stats(playtime_minutes);
 
 -- ---- Welcome messages ----
 -- One row per guild: fully configurable via the dashboard. The bot reads

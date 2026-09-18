@@ -15,6 +15,7 @@ const {
 } = require('../utils/validate');
 const { isValidJob } = require('../../shared/jobs');
 const { isValidItem } = require('../../shared/items');
+const { isValidVehicle } = require('../../shared/vehicles');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
@@ -25,6 +26,7 @@ const MAX_RANK_LEVEL = parseInt(process.env.MAX_RANK_LEVEL, 10) || 20;
 const MAX_JOB_LEVEL = parseInt(process.env.MAX_JOB_LEVEL, 10) || 100;
 const MAX_ITEM_AMOUNT = parseInt(process.env.MAX_ITEM_AMOUNT, 10) || 100;
 const MAX_COINS_AMOUNT = parseInt(process.env.MAX_COINS_AMOUNT, 10) || 100000;
+const MAX_XP_AMOUNT = parseInt(process.env.MAX_XP_AMOUNT, 10) || 1000000;
 
 async function logAudit(action, discordId, robloxId, details) {
   await db.execute({
@@ -134,6 +136,25 @@ function validatePayload(type, payload) {
     case 'check_money':
       return null; // no payload required
 
+    case 'set_xp':
+      if (!isPositiveInteger(payload.amount, MAX_XP_AMOUNT)) {
+        return `amount must be an integer between 0 and ${MAX_XP_AMOUNT}`;
+      }
+      return null;
+
+    case 'give_vehicle':
+    case 'remove_vehicle':
+      if (!isValidVehicle(payload.vehicle)) {
+        return 'vehicle must be a valid vehicle from the whitelist';
+      }
+      return null;
+
+    case 'check_inventory':
+      return null; // no payload required
+
+    case 'check_stats':
+      return null; // no payload required
+
     default:
       return 'Unsupported command type';
   }
@@ -236,6 +257,30 @@ router.post(
     await logAudit('CANCEL_COMMAND', actorDiscordId, command.roblox_id, `Command #${commandId} (${command.type}) cancelled`);
 
     res.json({ success: true });
+  })
+);
+
+// GET /commands/queue-status/overview — used by /healthcheck
+router.get(
+  '/queue-status/overview',
+  asyncHandler(async (req, res) => {
+    const now = Date.now();
+    await db.execute({
+      sql: `UPDATE commands SET status = 'expired' WHERE status = 'pending' AND expires_at < ?`,
+      args: [now],
+    });
+
+    const result = await db.execute(
+      `SELECT status, COUNT(*) as count FROM commands WHERE created_at > ? GROUP BY status`,
+      [now - 60 * 60 * 1000]
+    );
+
+    const counts = { pending: 0, processing: 0, completed: 0, failed: 0, expired: 0 };
+    for (const row of result.rows) {
+      counts[row.status] = Number(row.count);
+    }
+
+    res.json({ lastHour: counts });
   })
 );
 

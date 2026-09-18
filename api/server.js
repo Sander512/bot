@@ -18,6 +18,11 @@ const giveawaysRoutes = require('./routes/giveaways');
 const welcomeRoutes = require('./routes/welcome');
 const authRoutes = require('./routes/auth');
 const discordGuildsRoutes = require('./routes/discordGuilds');
+const warningsRoutes = require('./routes/warnings');
+const notesRoutes = require('./routes/notes');
+const staffDutyRoutes = require('./routes/staffDuty');
+const whitelistRoutes = require('./routes/whitelist');
+const playerStatsRoutes = require('./routes/playerStats');
 const { initDb } = require('./database');
 const config = require('./config');
 const { requireApiKey } = require('./middleware/auth');
@@ -84,6 +89,11 @@ app.use('/commands', requireApiKey, commandsRoutes);
 app.use('/roblox', requireApiKey, robloxRoutes);
 app.use('/servers', requireApiKey, serversRoutes);
 app.use('/players', requireApiKey, playersRoutes);
+app.use('/warnings', requireApiKey, warningsRoutes);
+app.use('/notes', requireApiKey, notesRoutes);
+app.use('/staff-duty', requireApiKey, staffDutyRoutes);
+app.use('/whitelist', requireApiKey, whitelistRoutes);
+app.use('/player-stats', requireApiKey, playerStatsRoutes);
 // Ticket routes have mixed auth: bot-only endpoints require X-API-Key,
 // dashboard-facing endpoints accept either X-API-Key or a Discord-login
 // session scoped to that guild — see the per-route middleware inside

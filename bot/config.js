@@ -40,14 +40,29 @@ const config = {
   roles: {
     staffRoleId: process.env.STAFF_ROLE_ID || null,
     managementRoleId: process.env.MANAGEMENT_ROLE_ID || null,
+    // Fallback/general audit channel — used whenever a category-specific
+    // channel below isn't set.
     auditLogChannelId: process.env.AUDIT_LOG_CHANNEL_ID || null,
+    // Optional per-category audit channels. Leave any of these empty to have
+    // that category fall back to AUDIT_LOG_CHANNEL_ID instead. See
+    // bot/utils/logger.js for which actions map to which category.
+    auditLogChannels: {
+      economy: process.env.AUDIT_LOG_CHANNEL_ECONOMY || null,
+      moderation: process.env.AUDIT_LOG_CHANNEL_MODERATION || null,
+      staff: process.env.AUDIT_LOG_CHANNEL_STAFF || null,
+    },
   },
 
   limits: {
     maxMoneyAmount: parseInt(process.env.MAX_MONEY_AMOUNT, 10) || 1000000,
     maxRankLevel: parseInt(process.env.MAX_RANK_LEVEL, 10) || 20,
     maxJobLevel: parseInt(process.env.MAX_JOB_LEVEL, 10) || 100,
+    maxXpAmount: parseInt(process.env.MAX_XP_AMOUNT, 10) || 1000000,
   },
+
+  // Canonical vehicle list — mirror your in-game vehicle system here, same
+  // idea as allowedJobs below.
+  allowedVehicles: require('../shared/vehicles').VEHICLES,
 
   // Colors used across embeds — matches Forever RP branding
   colors: {

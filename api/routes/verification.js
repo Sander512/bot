@@ -239,6 +239,36 @@ router.get(
   })
 );
 
+// GET /verification/by-roblox/:robloxId — reverse lookup, used by
+// /staffactivity and other commands that only have a Roblox UserId on hand.
+router.get(
+  '/by-roblox/:robloxId',
+  asyncHandler(async (req, res) => {
+    const { robloxId } = req.params;
+
+    if (!isRobloxId(robloxId)) {
+      return res.status(400).json({ error: 'Invalid robloxId' });
+    }
+
+    const result = await db.execute({
+      sql: 'SELECT * FROM accounts WHERE roblox_id = ? AND verified = 1',
+      args: [String(robloxId)],
+    });
+    const account = result.rows[0];
+
+    if (!account) {
+      return res.json({ verified: false });
+    }
+
+    res.json({
+      verified: true,
+      discordId: account.discord_id,
+      robloxId: account.roblox_id,
+      robloxUsername: account.roblox_username,
+    });
+  })
+);
+
 // POST /verification/unverify  { discordId, actorDiscordId }
 router.post(
   '/unverify',

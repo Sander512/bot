@@ -75,6 +75,8 @@ const api = {
   cancelCommand: (id, actorDiscordId) =>
     request('POST', '/commands/cancel', { id, actorDiscordId }),
 
+  getQueueStatus: () => request('GET', '/commands/queue-status/overview'),
+
   // ---- Servers ----
   getOnlineServers: () => request('GET', '/servers/online'),
 
@@ -83,8 +85,37 @@ const api = {
   upsertDiscordGuild: (id, name, icon) => request('POST', '/discord-guilds/upsert', { id, name, icon }),
   removeDiscordGuild: (guildId) => request('DELETE', `/discord-guilds/${guildId}`),
 
+  getVerificationByRobloxId: (robloxId) => request('GET', `/verification/by-roblox/${robloxId}`),
+
   // ---- Players ----
   getAccountHistory: (robloxId) => request('GET', `/players/${robloxId}/history`),
+
+  // ---- Warnings ----
+  createWarning: (discordId, robloxId, reason, staffId) =>
+    request('POST', '/warnings/create', { discordId, robloxId, reason, staffId }),
+  getWarnings: (discordId) => request('GET', `/warnings/${discordId}`),
+  revokeWarning: (id, actorDiscordId) => request('POST', '/warnings/revoke', { id, actorDiscordId }),
+
+  // ---- Staff notes ----
+  createNote: (discordId, robloxId, note, staffId) =>
+    request('POST', '/notes/create', { discordId, robloxId, note, staffId }),
+  getNotes: (discordId) => request('GET', `/notes/${discordId}`),
+
+  // ---- Whitelist ----
+  addToWhitelist: (robloxId, robloxUsername, discordId, actorDiscordId) =>
+    request('POST', '/whitelist/add', { robloxId, robloxUsername, discordId, actorDiscordId }),
+  removeFromWhitelist: (robloxId, actorDiscordId) =>
+    request('POST', '/whitelist/remove', { robloxId, actorDiscordId }),
+  getWhitelist: () => request('GET', '/whitelist/list'),
+
+  // ---- Staff duty ----
+  getActiveStaffDuty: () => request('GET', '/staff-duty/active'),
+  getStaffDutyLeaderboard: (limit) => request('GET', `/staff-duty/leaderboard${limit ? `?limit=${limit}` : ''}`),
+
+  // ---- Player stats / leaderboard ----
+  getPlayerStats: (robloxId) => request('GET', `/player-stats/${robloxId}`),
+  getStatsLeaderboard: (sort, limit) =>
+    request('GET', `/player-stats/leaderboard/top?sort=${sort || 'cash'}&limit=${limit || 10}`),
 
   // ---- Ticket panel system ----
   getTicketConfig: (guildId) => request('GET', `/tickets/config/${guildId}`),
