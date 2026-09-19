@@ -38,6 +38,10 @@ const MANAGEMENT_COMMANDS = new Set([
   'giveaway-reroll',
   'welcome-test',
   'verify-panel',
+  'setxp',
+  'whitelist',
+  'give-vehicle',
+  'remove-vehicle',
 ]);
 
 // Commands staff are explicitly allowed to run.
@@ -54,6 +58,14 @@ const STAFF_COMMANDS = new Set([
   'ticket-remove',
   'ticket-list',
   'giveaway-list',
+  'warn',
+  'warnings',
+  'note',
+  'inventory',
+  'playerstats',
+  'leaderboard',
+  'staffactivity',
+  'healthcheck',
 ]);
 
 // Commands anyone (verified guild member) may run.
