@@ -134,7 +134,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-(async () => {
+// Initializes the database and then binds the HTTP server to PORT.
+// Returns a Promise that resolves only once app.listen()'s callback has
+// fired — i.e. once the server is actually accepting connections. This
+// lets start.js (in combined API+bot mode) wait for the API to be ready
+// before logging the Discord bot in, avoiding a race where the bot tries
+// to call the API before it's listening yet.
+async function start() {
   try {
     await initDb();
     console.log('[API] Database schema geïnitialiseerd.');
@@ -143,7 +149,21 @@ app.use((err, req, res, next) => {
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
-    console.log(`[API] Forever RP API luistert op poort ${PORT}`);
+  return new Promise((resolve) => {
+    app.listen(PORT, () => {
+      console.log(`[API] Forever RP API luistert op poort ${PORT}`);
+      resolve();
+    });
   });
-})();
+}
+
+// Wanneer dit bestand direct wordt uitgevoerd (bijv. `node api/server.js`,
+// zoals bij een losse API-only deploy), start meteen zelf op.
+// Wanneer het via require() vanuit start.js wordt geladen (gecombineerde
+// modus), gebeurt dat NIET automatisch — start.js roept dan zelf
+// `await api.start()` aan op het gewenste moment.
+if (require.main === module) {
+  start();
+}
+
+module.exports = { app, start };

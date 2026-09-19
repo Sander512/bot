@@ -17,15 +17,24 @@
 // every boot, so you never have to manually run `npm run deploy` on hosts
 // (like Render) where you don't have easy shell access — add/rename/remove
 // a command file, push, and the next restart picks it up automatically.
+//
+// IMPORTANT: we wait for the API to actually be listening (app.listen's
+// callback has fired) before starting the bot. Otherwise the bot's
+// `ready` handler can try to call the API (e.g. /discord-guilds/sync)
+// before Express is accepting connections yet — a race condition that
+// shows up as "fetch failed" in the logs.
 
 const deployCommands = require('./bot/deploy-commands');
+const api = require('./api/server');
 
 console.log('[START] Forever RP — gecombineerde modus (API + Bot in 1 proces)');
 
-// Starts the Express API and binds to process.env.PORT / API_PORT.
-require('./api/server');
-
 (async () => {
+  // Wacht tot de API daadwerkelijk luistert voordat we verdergaan.
+  // api/server.js moet hiervoor een `start()` functie exporteren die een
+  // Promise teruggeeft die resolvet in de app.listen(...) callback.
+  await api.start();
+
   try {
     await deployCommands();
   } catch (err) {
