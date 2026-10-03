@@ -14,7 +14,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const url = process.env.TURSO_DATABASE_URL || `file:${process.env.DATABASE_PATH || './data/foreverrp.sqlite'}`;
+const url = process.env.TURSO_DATABASE_URL || `file:${process.env.DATABASE_PATH || './data/community.sqlite'}`;
 const authToken = process.env.TURSO_AUTH_TOKEN; // not used/needed in local file mode
 
 // In local file mode, make sure the containing directory exists —
@@ -30,56 +30,6 @@ if (url.startsWith('file:')) {
 const db = createClient(authToken ? { url, authToken } : { url });
 
 const SCHEMA = `
-CREATE TABLE IF NOT EXISTS accounts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  discord_id TEXT UNIQUE NOT NULL,
-  roblox_id TEXT,
-  roblox_username TEXT,
-  verification_code TEXT,
-  verification_expires INTEGER,
-  verified INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS commands (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT NOT NULL,
-  roblox_id TEXT NOT NULL,
-  payload TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending',
-  created_by TEXT,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  executed_at INTEGER,
-  result TEXT
-);
-
-CREATE TABLE IF NOT EXISTS bans (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  roblox_id TEXT NOT NULL,
-  reason TEXT,
-  banned_by TEXT,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  action TEXT NOT NULL,
-  discord_id TEXT,
-  roblox_id TEXT,
-  details TEXT,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS servers (
-  job_id TEXT PRIMARY KEY,
-  players INTEGER NOT NULL DEFAULT 0,
-  max_players INTEGER NOT NULL DEFAULT 0,
-  last_heartbeat INTEGER NOT NULL
-);
-
 -- ---- Discord guilds the bot is in ----
 -- Kept in sync by the bot itself (on ready + guildCreate/guildDelete) via
 -- authenticated API calls. The dashboard's "kies een server" screen cross-
@@ -91,72 +41,6 @@ CREATE TABLE IF NOT EXISTS discord_guilds (
   name TEXT NOT NULL,
   icon TEXT,
   updated_at INTEGER NOT NULL
-);
-
--- ---- Ticket panel system ----
--- One config row per Discord server (guild). Everything about how the
--- panel looks and behaves is stored here so it can be fully configured
--- via slash commands, without touching code or redeploying.
-CREATE TABLE IF NOT EXISTS ticket_config (
-  guild_id TEXT PRIMARY KEY,
-  panel_title TEXT NOT NULL DEFAULT 'Support Tickets',
-  panel_description TEXT NOT NULL DEFAULT 'Klik hieronder op het onderwerp dat het beste past om een ticket te openen.',
-  panel_color TEXT NOT NULL DEFAULT '1e3a8a',
-  panel_image TEXT,
-  panel_thumbnail TEXT,
-  panel_footer TEXT,
-  category_id TEXT,
-  log_channel_id TEXT,
-  transcript_channel_id TEXT,
-  support_role_id TEXT,
-  name_format TEXT NOT NULL DEFAULT 'ticket-{number}',
-  welcome_message TEXT NOT NULL DEFAULT 'Bedankt voor je ticket, {user}! Beschrijf je vraag of probleem zo duidelijk mogelijk — het team helpt je zo snel mogelijk.',
-  max_open_per_user INTEGER NOT NULL DEFAULT 1,
-  require_close_reason INTEGER NOT NULL DEFAULT 0,
-  ping_support_role INTEGER NOT NULL DEFAULT 1,
-  show_ticket_info INTEGER NOT NULL DEFAULT 1,
-  ticket_counter INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- The individual buttons/options a user can pick from the panel's select
--- menu. Each type can override the category/role/naming/welcome message
--- from ticket_config, so different ticket types can behave differently.
-CREATE TABLE IF NOT EXISTS ticket_types (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id TEXT NOT NULL,
-  key TEXT NOT NULL,
-  label TEXT NOT NULL,
-  emoji TEXT,
-  description TEXT,
-  category_id TEXT,
-  support_role_id TEXT,
-  name_format TEXT,
-  welcome_message TEXT,
-  position INTEGER NOT NULL DEFAULT 0,
-  claim_enabled INTEGER NOT NULL DEFAULT 1,
-  close_enabled INTEGER NOT NULL DEFAULT 1,
-  ask_description INTEGER NOT NULL DEFAULT 1,
-  max_open_override INTEGER,
-  created_at INTEGER NOT NULL,
-  UNIQUE(guild_id, key)
-);
-
-CREATE TABLE IF NOT EXISTS tickets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id TEXT NOT NULL,
-  channel_id TEXT UNIQUE NOT NULL,
-  opener_id TEXT NOT NULL,
-  type_key TEXT,
-  type_label TEXT,
-  ticket_number INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open',
-  claimed_by TEXT,
-  close_reason TEXT,
-  closed_by TEXT,
-  created_at INTEGER NOT NULL,
-  closed_at INTEGER
 );
 
 -- ---- Giveaways ----
@@ -182,86 +66,8 @@ CREATE TABLE IF NOT EXISTS giveaways (
   ended_at INTEGER
 );
 
--- ---- Warnings ----
--- A moderation history separate from bans: staff can log a warning against
--- a player without kicking/banning them. Stored against both IDs so it
--- still shows up even if the Discord<->Roblox link changes later.
-CREATE TABLE IF NOT EXISTS warnings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  discord_id TEXT NOT NULL,
-  roblox_id TEXT,
-  reason TEXT NOT NULL,
-  staff_id TEXT NOT NULL,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL
-);
-
--- ---- Staff notes ----
--- Free-form notes staff can attach to a player's Discord/Roblox account,
--- surfaced in /userinfo. Not a punishment log (see warnings for that).
-CREATE TABLE IF NOT EXISTS player_notes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  discord_id TEXT NOT NULL,
-  roblox_id TEXT,
-  note TEXT NOT NULL,
-  staff_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
--- ---- Whitelist ----
--- Optional join-gate: when enabled in the Roblox script (Config.WhitelistEnabled),
--- only Roblox accounts in this table may stay in the game.
-CREATE TABLE IF NOT EXISTS whitelist (
-  roblox_id TEXT PRIMARY KEY,
-  roblox_username TEXT,
-  discord_id TEXT,
-  added_by TEXT,
-  created_at INTEGER NOT NULL
-);
-
--- ---- Staff duty tracking ----
--- One row per Roblox account. Populated by the Roblox script watching the
--- existing "Staffdienst" BoolValue (the in-game staff-vest toggle) and
--- reporting every change here, so /staffactivity can show who's on duty
--- right now plus a lifetime duty-time leaderboard.
-CREATE TABLE IF NOT EXISTS staff_duty (
-  roblox_id TEXT PRIMARY KEY,
-  roblox_username TEXT,
-  discord_id TEXT,
-  on_duty INTEGER NOT NULL DEFAULT 0,
-  duty_started_at INTEGER,
-  total_duty_seconds INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL
-);
-
--- ---- Player stats snapshot ----
--- Refreshed periodically by the Roblox script (one report per online player,
--- similar in spirit to the server heartbeat) so /playerstats and
--- /leaderboard don't need every player online at query time.
-CREATE TABLE IF NOT EXISTS player_stats (
-  roblox_id TEXT PRIMARY KEY,
-  roblox_username TEXT,
-  discord_id TEXT,
-  cash INTEGER NOT NULL DEFAULT 0,
-  bank INTEGER NOT NULL DEFAULT 0,
-  xp INTEGER NOT NULL DEFAULT 0,
-  playtime_minutes INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_accounts_roblox_id ON accounts(roblox_id);
-CREATE INDEX IF NOT EXISTS idx_commands_roblox_id_status ON commands(roblox_id, status);
-CREATE INDEX IF NOT EXISTS idx_bans_roblox_id_active ON bans(roblox_id, active);
-CREATE INDEX IF NOT EXISTS idx_ticket_types_guild ON ticket_types(guild_id, position);
-CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status);
-CREATE INDEX IF NOT EXISTS idx_tickets_opener_status ON tickets(opener_id, status);
 CREATE INDEX IF NOT EXISTS idx_giveaways_status ON giveaways(status, ends_at);
 CREATE INDEX IF NOT EXISTS idx_giveaways_guild ON giveaways(guild_id, status);
-CREATE INDEX IF NOT EXISTS idx_warnings_discord ON warnings(discord_id, active);
-CREATE INDEX IF NOT EXISTS idx_notes_discord ON player_notes(discord_id);
-CREATE INDEX IF NOT EXISTS idx_staff_duty_on_duty ON staff_duty(on_duty);
-CREATE INDEX IF NOT EXISTS idx_player_stats_cash ON player_stats(cash);
-CREATE INDEX IF NOT EXISTS idx_player_stats_playtime ON player_stats(playtime_minutes);
 
 -- ---- Welcome messages ----
 -- One row per guild: fully configurable via the dashboard. The bot reads
@@ -273,15 +79,15 @@ CREATE TABLE IF NOT EXISTS welcome_config (
   channel_id TEXT,
   content TEXT DEFAULT 'Welkom {user}! 🎉',
   embed_enabled INTEGER NOT NULL DEFAULT 1,
-  embed_title TEXT DEFAULT 'Welkom op de server!',
+  embed_title TEXT DEFAULT 'Welkom in de community! 🌙',
   embed_description TEXT DEFAULT '{user} is zojuist lid geworden. We zijn nu met **{membercount}** leden!',
-  embed_color TEXT NOT NULL DEFAULT '10b981',
+  embed_color TEXT NOT NULL DEFAULT '7c5cff',
   embed_image TEXT,
-  embed_footer TEXT DEFAULT '© Forever Roleplay — All rights reserved',
+  embed_footer TEXT DEFAULT NULL,
   use_avatar_thumbnail INTEGER NOT NULL DEFAULT 1,
   auto_role_id TEXT,
   dm_enabled INTEGER NOT NULL DEFAULT 0,
-  dm_message TEXT DEFAULT 'Welkom bij Forever RP, {username}! Fijn dat je er bent.',
+  dm_message TEXT DEFAULT 'Welkom in de community, {username}! Fijn dat je er bent. 🌙',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -292,28 +98,13 @@ CREATE TABLE IF NOT EXISTS welcome_config (
 // too — each ALTER is wrapped so an "already exists" error (fresh installs
 // that already have the column via SCHEMA above) is silently ignored.
 const MIGRATIONS = [
-  `ALTER TABLE ticket_types ADD COLUMN claim_enabled INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE ticket_types ADD COLUMN close_enabled INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE ticket_types ADD COLUMN ask_description INTEGER NOT NULL DEFAULT 1`,
-  `ALTER TABLE ticket_types ADD COLUMN max_open_override INTEGER`,
-  `ALTER TABLE ticket_config ADD COLUMN show_ticket_info INTEGER NOT NULL DEFAULT 1`,
-  // The `tickets` table pre-dates the full ticket-panel system on some
-  // existing databases (e.g. earlier deploys) — CREATE TABLE IF NOT EXISTS
-  // above does nothing for those, so retrofit every column it now needs.
-  `ALTER TABLE tickets ADD COLUMN type_key TEXT`,
-  `ALTER TABLE tickets ADD COLUMN type_label TEXT`,
-  `ALTER TABLE tickets ADD COLUMN ticket_number INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE tickets ADD COLUMN claimed_by TEXT`,
-  `ALTER TABLE tickets ADD COLUMN close_reason TEXT`,
-  `ALTER TABLE tickets ADD COLUMN closed_by TEXT`,
-  `ALTER TABLE tickets ADD COLUMN closed_at INTEGER`,
   // Giveaways: retrofit for databases created before the button/description/
   // entries system existed.
   `ALTER TABLE giveaways ADD COLUMN description TEXT`,
   `ALTER TABLE giveaways ADD COLUMN entries TEXT NOT NULL DEFAULT '[]'`,
   // Welcome messages: retrofit for databases created before this feature.
   `ALTER TABLE welcome_config ADD COLUMN dm_enabled INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE welcome_config ADD COLUMN dm_message TEXT DEFAULT 'Welkom bij Forever RP, {username}! Fijn dat je er bent.'`,
+  `ALTER TABLE welcome_config ADD COLUMN dm_message TEXT DEFAULT 'Welkom in de community, {username}! Fijn dat je er bent. 🌙'`,
 ];
 
 async function initDb() {

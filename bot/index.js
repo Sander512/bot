@@ -3,14 +3,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, MessageFlags, Events } = require('discord.js');
 const config = require('./config');
 const permissions = require('./utils/permissions');
 const embeds = require('./utils/embeds');
 const logger = require('./utils/logger');
-const ticketInteractions = require('./handlers/ticketInteractions');
 const giveawayInteractions = require('./handlers/giveawayInteractions');
-const verifyInteractions = require('./handlers/verifyInteractions');
 const { handleMemberJoin } = require('./utils/welcome');
 const api = require('./utils/api');
 const { startGiveawayScheduler } = require('./giveawayScheduler');
@@ -41,9 +39,9 @@ for (const file of commandFiles) {
 logger.info(`${client.commands.size} commands geladen.`);
 
 // ---- Ready ----
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   logger.info(`Ingelogd als ${client.user.tag}`);
-  client.user.setActivity('Forever Roleplay');
+  client.user.setActivity(config.branding.name);
 
   // Reports every server the bot is currently in to the API, so the
   // dashboard's "kies een server" screen (after Discord login) knows
@@ -101,29 +99,11 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (ticketInteractions.isTicketInteraction(interaction)) {
-    try {
-      await ticketInteractions.handleTicketInteraction(interaction);
-    } catch (err) {
-      logger.error('Fout bij ticket interactie:', err);
-    }
-    return;
-  }
-
   if (giveawayInteractions.isGiveawayInteraction(interaction)) {
     try {
       await giveawayInteractions.handleGiveawayInteraction(interaction);
     } catch (err) {
       logger.error('Fout bij giveaway interactie:', err);
-    }
-    return;
-  }
-
-  if (verifyInteractions.isVerifyInteraction(interaction)) {
-    try {
-      await verifyInteractions.handleVerifyInteraction(interaction);
-    } catch (err) {
-      logger.error('Fout bij verify interactie:', err);
     }
     return;
   }

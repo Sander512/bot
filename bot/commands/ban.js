@@ -1,15 +1,15 @@
 // bot/commands/ban.js
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const api = require('../utils/api');
 const embeds = require('../utils/embeds');
 const logger = require('../utils/logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
-    .setDescription('[Management] Ban een speler van Forever RP')
+    .setDescription('[Management] Ban iemand van de server')
+    .setDMPermission(false)
     .addUserOption((opt) =>
-      opt.setName('discord').setDescription('De Discord gebruiker').setRequired(true)
+      opt.setName('gebruiker').setDescription('De gebruiker die je wilt bannen').setRequired(true)
     )
     .addStringOption((opt) =>
       opt.setName('reden').setDescription('Reden voor de ban').setRequired(true).setMaxLength(500)
@@ -18,38 +18,36 @@ module.exports = {
   async execute(interaction, { client }) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const target = interaction.options.getUser('discord', true);
+    const target = interaction.options.getUser('gebruiker', true);
     const reason = interaction.options.getString('reden', true);
 
+    if (target.id === interaction.user.id) {
+      await interaction.editReply({ embeds: [embeds.error('Dat kan niet', 'Je kunt jezelf niet bannen.')] });
+      return;
+    }
+    if (target.id === client.user.id) {
+      await interaction.editReply({ embeds: [embeds.error('Dat kan niet', 'Je kunt de bot niet bannen.')] });
+      return;
+    }
+
     try {
-      const verification = await api.getVerificationByDiscordId(target.id);
-      if (!verification?.verified) {
+      const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+      if (member && !member.bannable) {
         await interaction.editReply({
-          embeds: [embeds.error('Speler niet geverifieerd', `<@${target.id}> heeft geen gekoppeld Roblox account.`)],
+          embeds: [embeds.error('Niet mogelijk', 'Ik kan deze gebruiker niet bannen (rol staat hoger dan die van mij of is de eigenaar).')],
         });
         return;
       }
 
-      const command = await api.createCommand(
-        'ban',
-        verification.robloxId,
-        { reason },
-        interaction.user.id
-      );
+      await interaction.guild.members.ban(target.id, { reason: `${reason} — door ${interaction.user.tag}` });
 
       await interaction.editReply({
-        embeds: [
-          embeds.success(
-            'Speler gebanned',
-            `<@${target.id}> (${verification.robloxUsername}) is gebanned.\nReden: ${reason}\nCommand ID: \`${command.id}\``
-          ),
-        ],
+        embeds: [embeds.success('Gebruiker gebanned', `<@${target.id}> is gebanned.\nReden: ${reason}`)],
       });
 
       await logger.auditLog(client, {
         action: 'BAN',
         discordId: target.id,
-        robloxId: verification.robloxId,
         details: `Reden: ${reason} — door <@${interaction.user.id}>`,
       });
     } catch (err) {

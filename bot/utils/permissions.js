@@ -4,75 +4,48 @@
 // Rules:
 //  - Administrator (Discord permission) always has access to everything.
 //  - Management role has access to everything in MANAGEMENT_COMMANDS.
-//  - Staff role only has access to commands explicitly listed in STAFF_COMMANDS.
+//  - The optional staff role only has access to commands listed in STAFF_COMMANDS.
 
 const { PermissionFlagsBits } = require('discord.js');
 const config = require('../config');
 
 // Commands management is allowed to run.
+// Management = Discord Administrators (👑・Owner) + the optional MANAGEMENT_ROLE_ID.
 const MANAGEMENT_COMMANDS = new Set([
-  'give-money',
-  'remove-money',
-  'set-money',
-  'setjob',
-  'setrank',
   'ban',
   'unban',
   'kick',
   'announce',
-  'shutdown',
-  'unverify',
-  'jumpscare',
-  'revive',
-  'giveitem',
-  'clearinventory',
-  'givecoins',
-  'givepack',
-  'ticket-setup',
-  'ticket-addtype',
-  'ticket-removetype',
-  'ticket-listtypes',
-  'ticket-send',
+  'clear',
+  'timeout',
+  'untimeout',
+  'slowmode',
+  'say',
+  'lock',
+  'unlock',
   'giveaway-start',
   'giveaway-end',
   'giveaway-reroll',
   'welcome-test',
-  'verify-panel',
-  'setxp',
-  'whitelist',
-  'give-vehicle',
-  'remove-vehicle',
 ]);
 
-// Commands staff are explicitly allowed to run.
-// Edit this list to grant staff access to specific commands.
+// Commands the optional STAFF_ROLE_ID is explicitly allowed to run.
+// Edit this list to grant that role access to specific commands.
 const STAFF_COMMANDS = new Set([
-  'userinfo',
-  'online',
-  'checkverify',
-  'checkaccount',
-  'checkgeld',
-  'ticket-claim',
-  'ticket-close',
-  'ticket-add',
-  'ticket-remove',
-  'ticket-list',
   'giveaway-list',
-  'warn',
-  'warnings',
-  'note',
-  'inventory',
-  'playerstats',
-  'leaderboard',
-  'staffactivity',
-  'healthcheck',
 ]);
 
-// Commands anyone (verified guild member) may run.
+// Commands anyone in the server may run.
 const PUBLIC_COMMANDS = new Set([
-  'verify',
   'userinfo',
-  'online',
+  'ping',
+  'avatar',
+  'serverinfo',
+  'poll',
+  'choose',
+  'rps',
+  'rate',
+  'hug',
   '8ball',
   'coinflip',
   'roll',

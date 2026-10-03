@@ -2,19 +2,18 @@
 // Auth flow: "Inloggen met Discord" (server-side OAuth, /auth/discord) sets
 // an httpOnly session cookie — the browser never sees an API key. This
 // file just calls /auth/me to find out who's logged in and which servers
-// they can manage, lets them pick one, then drives the existing
-// /tickets/* API using that cookie (credentials: 'include').
+// they can manage, lets them pick one, then drives the welcome and
+// giveaway APIs using that cookie (credentials: 'include').
 
 const state = {
   guildId: '',
   guildName: '',
   guilds: [],
-  types: [],
 };
 
 const $ = (id) => document.getElementById(id);
 
-const SELECTED_GUILD_KEY = 'ticketDashboardSelectedGuild';
+const SELECTED_GUILD_KEY = 'communityDashboardSelectedGuild';
 
 function loadSelectedGuild() {
   return sessionStorage.getItem(SELECTED_GUILD_KEY) || '';
@@ -132,306 +131,16 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     $(`tab-${btn.dataset.tab}`).classList.remove('hidden');
 
     const titles = {
-      settings: ['Paneel instellingen', 'Pas het uiterlijk en gedrag van je ticket panel volledig aan.'],
-      types: ['Ticket types', 'Beheer de opties die gebruikers kunnen kiezen in het panel.'],
-      tickets: ['Open tickets', 'Overzicht van alle momenteel open of geclaimde tickets.'],
-      giveaways: ['Giveaways', 'Overzicht van lopende en afgelopen giveaways in deze server.'],
       welcome: ['Welkomstbericht', 'Stel in wat er gebeurt zodra iemand de server joint.'],
+      giveaways: ['Giveaways', 'Overzicht van lopende en afgelopen giveaways in deze server.'],
     };
     $('pageTitle').textContent = titles[btn.dataset.tab][0];
     $('pageSubtitle').textContent = titles[btn.dataset.tab][1];
 
-    if (btn.dataset.tab === 'tickets') loadTickets();
     if (btn.dataset.tab === 'giveaways') loadGiveaways();
     if (btn.dataset.tab === 'welcome') loadWelcomeConfig();
   });
 });
-
-// ---- Settings tab ----
-function fillSettingsForm(config) {
-  $('cfg_panelTitle').value = config.panelTitle || '';
-  $('cfg_panelDescription').value = config.panelDescription || '';
-  $('cfg_panelColor').value = config.panelColor || '1e3a8a';
-  $('cfg_panelColorPicker').value = `#${config.panelColor || '1e3a8a'}`;
-  $('cfg_panelImage').value = config.panelImage || '';
-  $('cfg_panelThumbnail').value = config.panelThumbnail || '';
-  $('cfg_panelFooter').value = config.panelFooter || '';
-  $('cfg_categoryId').value = config.categoryId || '';
-  $('cfg_logChannelId').value = config.logChannelId || '';
-  $('cfg_supportRoleId').value = config.supportRoleId || '';
-  $('cfg_nameFormat').value = config.nameFormat || '';
-  $('cfg_pingSupportRole').checked = !!config.pingSupportRole;
-  $('cfg_requireCloseReason').checked = !!config.requireCloseReason;
-  $('cfg_maxOpenPerUser').value = config.maxOpenPerUser || 1;
-  $('cfg_welcomeMessage').value = config.welcomeMessage || '';
-  $('cfg_showTicketInfo').checked = config.showTicketInfo !== false;
-  updatePreview();
-}
-
-function updatePreview() {
-  $('previewBar').style.background = `#${($('cfg_panelColor').value || '1e3a8a').replace('#', '')}`;
-  $('previewTitle').textContent = $('cfg_panelTitle').value || 'Support Tickets';
-  $('previewDesc').textContent = $('cfg_panelDescription').value || '';
-  $('previewFooter').textContent = $('cfg_panelFooter').value || '';
-
-  const thumb = $('cfg_panelThumbnail').value;
-  $('previewThumb').src = thumb;
-  $('previewThumb').classList.toggle('hidden', !thumb);
-
-  const image = $('cfg_panelImage').value;
-  $('previewImage').src = image;
-  $('previewImage').classList.toggle('hidden', !image);
-}
-
-['cfg_panelTitle', 'cfg_panelDescription', 'cfg_panelFooter', 'cfg_panelImage', 'cfg_panelThumbnail'].forEach((id) =>
-  $(id).addEventListener('input', updatePreview)
-);
-
-$('cfg_panelColorPicker').addEventListener('input', () => {
-  $('cfg_panelColor').value = $('cfg_panelColorPicker').value.replace('#', '');
-  updatePreview();
-});
-$('cfg_panelColor').addEventListener('input', () => {
-  const clean = $('cfg_panelColor').value.replace('#', '');
-  if (/^[0-9a-fA-F]{6}$/.test(clean)) $('cfg_panelColorPicker').value = `#${clean}`;
-  updatePreview();
-});
-
-$('saveSettingsBtn').addEventListener('click', async () => {
-  const btn = $('saveSettingsBtn');
-  const status = $('saveStatus');
-  btn.disabled = true;
-  status.style.color = 'var(--success)';
-  status.textContent = 'Opslaan...';
-
-  const fields = {
-    panelTitle: $('cfg_panelTitle').value,
-    panelDescription: $('cfg_panelDescription').value,
-    panelColor: $('cfg_panelColor').value.replace('#', '') || '1e3a8a',
-    panelImage: $('cfg_panelImage').value || null,
-    panelThumbnail: $('cfg_panelThumbnail').value || null,
-    panelFooter: $('cfg_panelFooter').value || null,
-    categoryId: $('cfg_categoryId').value || null,
-    logChannelId: $('cfg_logChannelId').value || null,
-    supportRoleId: $('cfg_supportRoleId').value || null,
-    nameFormat: $('cfg_nameFormat').value || 'ticket-{number}',
-    welcomeMessage: $('cfg_welcomeMessage').value,
-    pingSupportRole: $('cfg_pingSupportRole').checked,
-    requireCloseReason: $('cfg_requireCloseReason').checked,
-    maxOpenPerUser: parseInt($('cfg_maxOpenPerUser').value, 10) || 1,
-    showTicketInfo: $('cfg_showTicketInfo').checked,
-  };
-
-  try {
-    const { config } = await api('POST', '/tickets/config', { guildId: state.guildId, ...fields });
-    fillSettingsForm(config);
-    status.textContent = '✅ Opgeslagen';
-  } catch (err) {
-    status.style.color = 'var(--danger)';
-    status.textContent = `❌ ${err.message}`;
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => (status.textContent = ''), 4000);
-  }
-});
-
-// ---- Types tab ----
-const TYPE_FORM_FIELDS = [
-  'type_label',
-  'type_emoji',
-  'type_key',
-  'type_description',
-  'type_categoryId',
-  'type_supportRoleId',
-  'type_nameFormat',
-  'type_welcomeMessage',
-  'type_maxOpenOverride',
-];
-
-state.editingTypeKey = null;
-
-function badge(text, tone) {
-  return `<span class="type-flag type-flag-${tone || 'muted'}">${escapeHtml(text)}</span>`;
-}
-
-function renderTypes() {
-  $('typeCount').textContent = `${state.types.length}/25`;
-  const list = $('typesList');
-
-  if (state.types.length === 0) {
-    list.innerHTML = '<div class="empty-state">Nog geen ticket types toegevoegd.</div>';
-    return;
-  }
-
-  list.innerHTML = '';
-  state.types.forEach((t) => {
-    const row = document.createElement('div');
-    row.className = 'type-row';
-
-    const flags = [];
-    if (t.claimEnabled === false) flags.push(badge('Claim uit', 'off'));
-    if (t.closeEnabled === false) flags.push(badge('Sluiten uit', 'off'));
-    if (t.askDescription !== false) flags.push(badge('Vraagt beschrijving', 'on'));
-    if (t.maxOpenOverride) flags.push(badge(`Max ${t.maxOpenOverride}`, 'on'));
-
-    row.innerHTML = `
-      <div class="type-row-info">
-        <span class="type-emoji">${t.emoji || '🎫'}</span>
-        <div>
-          <div class="type-label">${escapeHtml(t.label)} <span class="type-key">(${escapeHtml(t.key)})</span></div>
-          ${t.description ? `<div class="type-desc">${escapeHtml(t.description)}</div>` : ''}
-          ${flags.length ? `<div class="type-flags">${flags.join('')}</div>` : ''}
-        </div>
-      </div>
-      <div class="type-row-actions">
-        <button class="btn btn-ghost btn-small" data-action="edit" data-key="${escapeHtml(t.key)}">Bewerken</button>
-        <button class="btn btn-danger btn-small" data-action="delete" data-key="${escapeHtml(t.key)}">Verwijderen</button>
-      </div>
-    `;
-    row.querySelector('[data-action="edit"]').addEventListener('click', () => startEditType(t));
-    row.querySelector('[data-action="delete"]').addEventListener('click', () => removeType(t.key));
-    list.appendChild(row);
-  });
-}
-
-async function loadTypes() {
-  const { types } = await api('GET', `/tickets/types/${state.guildId}`);
-  state.types = types;
-  renderTypes();
-}
-
-async function removeType(key) {
-  if (!confirm(`Ticket type "${key}" verwijderen?`)) return;
-  try {
-    await api('DELETE', `/tickets/types/${state.guildId}/${encodeURIComponent(key)}`);
-    if (state.editingTypeKey === key) resetTypeForm();
-    await loadTypes();
-  } catch (err) {
-    alert(`Verwijderen mislukt: ${err.message}`);
-  }
-}
-
-function startEditType(t) {
-  state.editingTypeKey = t.key;
-  $('type_label').value = t.label || '';
-  $('type_emoji').value = t.emoji || '';
-  $('type_key').value = t.key || '';
-  $('type_key').disabled = true;
-  $('type_description').value = t.description || '';
-  $('type_categoryId').value = t.categoryId || '';
-  $('type_supportRoleId').value = t.supportRoleId || '';
-  $('type_nameFormat').value = t.nameFormat || '';
-  $('type_welcomeMessage').value = t.welcomeMessage || '';
-  $('type_maxOpenOverride').value = t.maxOpenOverride || '';
-  $('type_claimEnabled').checked = t.claimEnabled !== false;
-  $('type_closeEnabled').checked = t.closeEnabled !== false;
-  $('type_askDescription').checked = t.askDescription !== false;
-
-  $('typeFormTitle').textContent = `Type bewerken — ${t.label}`;
-  $('addTypeBtn').textContent = '💾 Wijzigingen opslaan';
-  $('cancelEditTypeBtn').classList.remove('hidden');
-  document.querySelector('[data-tab="types"]').scrollIntoView?.();
-}
-
-function resetTypeForm() {
-  state.editingTypeKey = null;
-  TYPE_FORM_FIELDS.forEach((id) => ($(id).value = ''));
-  $('type_key').disabled = false;
-  $('type_claimEnabled').checked = true;
-  $('type_closeEnabled').checked = true;
-  $('type_askDescription').checked = true;
-  $('typeFormTitle').textContent = 'Nieuw ticket type';
-  $('addTypeBtn').textContent = '➕ Type toevoegen';
-  $('cancelEditTypeBtn').classList.add('hidden');
-}
-
-$('cancelEditTypeBtn').addEventListener('click', resetTypeForm);
-
-$('addTypeBtn').addEventListener('click', async () => {
-  const btn = $('addTypeBtn');
-  const status = $('addTypeStatus');
-  const label = $('type_label').value.trim();
-  const isEditing = !!state.editingTypeKey;
-
-  if (!label) {
-    status.style.color = 'var(--danger)';
-    status.textContent = '❌ Label is verplicht';
-    return;
-  }
-
-  btn.disabled = true;
-  status.style.color = 'var(--success)';
-  status.textContent = isEditing ? 'Opslaan...' : 'Toevoegen...';
-
-  const maxOpenRaw = $('type_maxOpenOverride').value.trim();
-
-  const sharedFields = {
-    label,
-    emoji: $('type_emoji').value.trim() || null,
-    description: $('type_description').value.trim() || null,
-    categoryId: $('type_categoryId').value.trim() || null,
-    supportRoleId: $('type_supportRoleId').value.trim() || null,
-    nameFormat: $('type_nameFormat').value.trim() || null,
-    welcomeMessage: $('type_welcomeMessage').value.trim() || null,
-    claimEnabled: $('type_claimEnabled').checked,
-    closeEnabled: $('type_closeEnabled').checked,
-    askDescription: $('type_askDescription').checked,
-    maxOpenOverride: maxOpenRaw ? parseInt(maxOpenRaw, 10) : null,
-  };
-
-  try {
-    if (isEditing) {
-      await api('PATCH', `/tickets/types/${state.guildId}/${encodeURIComponent(state.editingTypeKey)}`, sharedFields);
-      status.textContent = '✅ Opgeslagen';
-    } else {
-      await api('POST', '/tickets/types', {
-        guildId: state.guildId,
-        key: $('type_key').value.trim() || undefined,
-        ...sharedFields,
-      });
-      status.textContent = '✅ Toegevoegd';
-    }
-    resetTypeForm();
-    await loadTypes();
-  } catch (err) {
-    status.style.color = 'var(--danger)';
-    status.textContent = `❌ ${err.message}`;
-  } finally {
-    btn.disabled = false;
-    setTimeout(() => (status.textContent = ''), 4000);
-  }
-});
-
-// ---- Tickets tab ----
-async function loadTickets() {
-  const list = $('ticketsList');
-  list.innerHTML = '<div class="empty-state">Laden...</div>';
-
-  try {
-    const { tickets } = await api('GET', `/tickets/list/${state.guildId}`);
-    const open = tickets.filter((t) => t.status !== 'closed');
-
-    if (open.length === 0) {
-      list.innerHTML = '<div class="empty-state">Geen open tickets.</div>';
-      return;
-    }
-
-    list.innerHTML = '';
-    open.forEach((t) => {
-      const row = document.createElement('div');
-      row.className = 'ticket-row';
-      row.innerHTML = `
-        <div>#${String(t.ticketNumber).padStart(4, '0')} — ${escapeHtml(t.typeLabel || 'Onbekend type')}</div>
-        <span class="ticket-badge ${t.claimedBy ? 'claimed' : ''}">${t.claimedBy ? 'Geclaimd' : 'Open'}</span>
-      `;
-      list.appendChild(row);
-    });
-  } catch (err) {
-    list.innerHTML = `<div class="empty-state">Fout bij laden: ${escapeHtml(err.message)}</div>`;
-  }
-}
-
-$('refreshTicketsBtn').addEventListener('click', loadTickets);
 
 // ---- Giveaways tab (read-only) ----
 async function loadGiveaways() {
@@ -494,8 +203,8 @@ function fillWelcomeForm(config) {
   $('wc_embedEnabled').checked = !!config.embedEnabled;
   $('wc_embedTitle').value = config.embedTitle || '';
   $('wc_embedDescription').value = config.embedDescription || '';
-  $('wc_embedColor').value = config.embedColor || '10b981';
-  $('wc_embedColorPicker').value = `#${config.embedColor || '10b981'}`;
+  $('wc_embedColor').value = config.embedColor || '7c5cff';
+  $('wc_embedColorPicker').value = `#${config.embedColor || '7c5cff'}`;
   $('wc_embedImage').value = config.embedImage || '';
   $('wc_embedFooter').value = config.embedFooter || '';
   $('wc_useAvatarThumbnail').checked = !!config.useAvatarThumbnail;
@@ -520,8 +229,8 @@ function updateWelcomePreview() {
   $('wcPreviewEmbed').classList.toggle('hidden', !enabled);
   if (!enabled) return;
 
-  $('wcPreviewBar').style.background = `#${($('wc_embedColor').value || '10b981').replace('#', '')}`;
-  $('wcPreviewTitle').textContent = fillWelcomePreviewPlaceholders($('wc_embedTitle').value) || 'Welkom op de server!';
+  $('wcPreviewBar').style.background = `#${($('wc_embedColor').value || '7c5cff').replace('#', '')}`;
+  $('wcPreviewTitle').textContent = fillWelcomePreviewPlaceholders($('wc_embedTitle').value) || 'Welkom in de community! 🌙';
   $('wcPreviewDesc').textContent = fillWelcomePreviewPlaceholders($('wc_embedDescription').value);
   $('wcPreviewFooter').textContent = $('wc_embedFooter').value || '';
 
@@ -560,6 +269,7 @@ async function loadWelcomeConfig() {
   } catch (err) {
     $('saveWelcomeStatus').style.color = 'var(--danger)';
     $('saveWelcomeStatus').textContent = `❌ Laden mislukt: ${err.message}`;
+    throw err;
   }
 }
 
@@ -577,7 +287,7 @@ $('saveWelcomeBtn').addEventListener('click', async () => {
     embedEnabled: $('wc_embedEnabled').checked,
     embedTitle: $('wc_embedTitle').value,
     embedDescription: $('wc_embedDescription').value,
-    embedColor: $('wc_embedColor').value.replace('#', '') || '10b981',
+    embedColor: $('wc_embedColor').value.replace('#', '') || '7c5cff',
     embedImage: $('wc_embedImage').value || null,
     embedFooter: $('wc_embedFooter').value || null,
     useAvatarThumbnail: $('wc_useAvatarThumbnail').checked,
@@ -606,16 +316,13 @@ function escapeHtml(str) {
 }
 
 
-// ---- Boot into the per-server settings dashboard ----
+// ---- Boot into the per-server dashboard ----
 async function boot() {
   showScreen('app');
   $('guildPill').textContent = state.guildName || state.guildId;
 
   try {
-    const { config, types } = await api('GET', `/tickets/config/${state.guildId}`);
-    fillSettingsForm(config);
-    state.types = types;
-    renderTypes();
+    await loadWelcomeConfig();
     $('statusPill').textContent = '● Verbonden';
     $('statusPill').style.background = '';
     $('statusPill').style.color = '';

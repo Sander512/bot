@@ -4,8 +4,13 @@
 // file just turns that config + a joining member into an actual Discord
 // message, and applies the auto-role if one is set.
 
-const { hexToInt } = require('./tickets');
 const embeds = require('./embeds');
+
+/** Converts a hex string like "7c5cff" (or "#7c5cff") to a Discord color int. */
+function hexToInt(hex, fallback = 0x7c5cff) {
+  const clean = String(hex || '').replace('#', '');
+  return /^[0-9a-fA-F]{6}$/.test(clean) ? parseInt(clean, 16) : fallback;
+}
 const logger = require('./logger');
 
 /**
@@ -32,7 +37,7 @@ function buildWelcomePayload(config, member) {
     const embed = embeds.custom({
       title: config.embedTitle ? fillWelcomePlaceholders(config.embedTitle, member) : undefined,
       description: config.embedDescription ? fillWelcomePlaceholders(config.embedDescription, member) : undefined,
-      color: hexToInt(config.embedColor, 0x10b981),
+      color: hexToInt(config.embedColor, 0x7c5cff),
       image: config.embedImage || undefined,
       thumbnail: config.useAvatarThumbnail ? member.user.displayAvatarURL({ size: 256 }) : undefined,
       footer: config.embedFooter || undefined,

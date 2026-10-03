@@ -12,7 +12,14 @@ function required(name) {
   return value;
 }
 
+const communityName = process.env.COMMUNITY_NAME || 'Chill Community';
+
 const config = {
+  branding: {
+    name: communityName,
+    footer: `🌙 ${communityName}`,
+  },
+
   discord: {
     token: required('DISCORD_TOKEN'),
     clientId: required('DISCORD_CLIENT_ID'),
@@ -24,8 +31,7 @@ const config = {
     // the API always binds to process.env.PORT (or API_PORT as fallback).
     // Default to that same port automatically so the bot never has to
     // guess/hardcode a port that doesn't match what the API actually bound to.
-    // Set API_BASE_URL explicitly only if the API runs as a SEPARATE service
-    // (e.g. bot and API deployed independently, or a custom domain).
+    // Set API_BASE_URL explicitly only if the API runs as a SEPARATE service.
     baseUrl:
       process.env.API_BASE_URL ||
       `http://localhost:${process.env.PORT || process.env.API_PORT || 3000}`,
@@ -34,48 +40,25 @@ const config = {
   },
 
   database: {
-    path: process.env.DATABASE_PATH || './data/foreverrp.sqlite',
+    path: process.env.DATABASE_PATH || './data/community.sqlite',
   },
 
+  // Optional. Leave empty and only Discord Administrators (the 👑・Owner
+  // role) can use the management commands.
   roles: {
     staffRoleId: process.env.STAFF_ROLE_ID || null,
     managementRoleId: process.env.MANAGEMENT_ROLE_ID || null,
-    // Fallback/general audit channel — used whenever a category-specific
-    // channel below isn't set.
     auditLogChannelId: process.env.AUDIT_LOG_CHANNEL_ID || null,
-    // Optional per-category audit channels. Leave any of these empty to have
-    // that category fall back to AUDIT_LOG_CHANNEL_ID instead. See
-    // bot/utils/logger.js for which actions map to which category.
-    auditLogChannels: {
-      economy: process.env.AUDIT_LOG_CHANNEL_ECONOMY || null,
-      moderation: process.env.AUDIT_LOG_CHANNEL_MODERATION || null,
-      staff: process.env.AUDIT_LOG_CHANNEL_STAFF || null,
-    },
   },
 
-  limits: {
-    maxMoneyAmount: parseInt(process.env.MAX_MONEY_AMOUNT, 10) || 1000000,
-    maxRankLevel: parseInt(process.env.MAX_RANK_LEVEL, 10) || 20,
-    maxJobLevel: parseInt(process.env.MAX_JOB_LEVEL, 10) || 100,
-    maxXpAmount: parseInt(process.env.MAX_XP_AMOUNT, 10) || 1000000,
-  },
-
-  // Canonical vehicle list — mirror your in-game vehicle system here, same
-  // idea as allowedJobs below.
-  allowedVehicles: require('../shared/vehicles').VEHICLES,
-
-  // Colors used across embeds — matches Forever RP branding
+  // Dark, modern palette
   colors: {
-    primary: 0x1e3a8a, // Dark blue
-    success: 0x10b981, // Green
-    error: 0xef4444,
-    warning: 0xf59e0b,
-    info: 0x3b82f6,
+    primary: 0x7c5cff, // Purple
+    success: 0x2ecc71, // Green
+    error: 0xed4245,
+    warning: 0xf1c40f,
+    info: 0x5865f2, // Blurple
   },
-
-  // Full job list (incl. gangs) — canonical source is shared/jobs.js,
-  // which itself should mirror your Roblox setjobconfig ModuleScript.
-  allowedJobs: require('../shared/jobs').JOBS,
 };
 
 module.exports = config;

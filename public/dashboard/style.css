@@ -341,7 +341,7 @@ input[type="color"] {
   overflow: hidden;
   display: flex;
 }
-.discord-embed-bar { width: 4px; flex-shrink: 0; background: #1e3a8a; }
+.discord-embed-bar { width: 4px; flex-shrink: 0; background: #7c5cff; }
 .discord-embed-body { padding: 12px 14px; flex: 1; position: relative; }
 .discord-embed-thumb {
   position: absolute; top: 12px; right: 14px;

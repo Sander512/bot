@@ -1,70 +1,47 @@
 // bot/commands/userinfo.js
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const api = require('../utils/api');
+const { SlashCommandBuilder } = require('discord.js');
 const embeds = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('userinfo')
-    .setDescription('Bekijk verificatie-informatie van een speler')
+    .setDescription('Bekijk informatie over een lid')
+    .setDMPermission(false)
     .addUserOption((opt) =>
-      opt.setName('discord').setDescription('De Discord gebruiker (standaard: jezelf)').setRequired(false)
+      opt.setName('gebruiker').setDescription('Het lid (standaard: jezelf)').setRequired(false)
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const target = interaction.options.getUser('gebruiker') || interaction.user;
+    const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
-    const target = interaction.options.getUser('discord') || interaction.user;
+    const created = Math.floor(target.createdTimestamp / 1000);
+    const fields = [
+      { name: 'Gebruiker', value: `<@${target.id}>`, inline: true },
+      { name: 'ID', value: target.id, inline: true },
+      { name: 'Account gemaakt', value: `<t:${created}:D> (<t:${created}:R>)` },
+    ];
 
-    try {
-      const info = await api.getVerificationByDiscordId(target.id);
+    if (member) {
+      const joined = Math.floor(member.joinedTimestamp / 1000);
+      const roles = member.roles.cache
+        .filter((r) => r.id !== interaction.guild.id)
+        .sort((a, b) => b.position - a.position)
+        .map((r) => `<@&${r.id}>`);
 
-      if (!info || !info.verified) {
-        await interaction.editReply({
-          embeds: [embeds.info('Niet geverifieerd', `<@${target.id}> heeft nog geen Roblox account gekoppeld.`)],
-        });
-        return;
-      }
-
-      const embed = embeds
-        .info('Gebruikersinformatie')
-        .addFields(
-          { name: 'Discord', value: `<@${target.id}>`, inline: true },
-          { name: 'Roblox username', value: info.robloxUsername || 'Onbekend', inline: true },
-          { name: 'Roblox UserId', value: String(info.robloxId), inline: true },
-          { name: 'Verified', value: info.verified ? 'Ja ✅' : 'Nee ❌', inline: true },
-          {
-            name: 'Verification date',
-            value: info.verifiedAt ? new Date(info.verifiedAt).toLocaleString('nl-NL') : 'Onbekend',
-            inline: true,
-          }
-        );
-
-      try {
-        const [{ activeCount, total: totalWarnings }, { notes }] = await Promise.all([
-          api.getWarnings(target.id),
-          api.getNotes(target.id),
-        ]);
-
-        if (totalWarnings > 0) {
-          embed.addFields({ name: '⚠️ Waarschuwingen', value: `${activeCount} actief / ${totalWarnings} totaal (\`/warnings\` voor details)` });
-        }
-        if (notes.length > 0) {
-          const preview = notes
-            .slice(0, 3)
-            .map((n) => `• ${n.note} — <@${n.staffId}>`)
-            .join('\n');
-          embed.addFields({ name: `📝 Staff-notities (${notes.length})`, value: preview + (notes.length > 3 ? `\n...en ${notes.length - 3} meer` : '') });
-        }
-      } catch {
-        // Non-fatal — userinfo still works without the warnings/notes enrichment.
-      }
-
-      await interaction.editReply({ embeds: [embed] });
-    } catch (err) {
-      await interaction.editReply({
-        embeds: [embeds.error('Ophalen mislukt', err.message)],
-      });
+      fields.push(
+        { name: 'Lid sinds', value: `<t:${joined}:D> (<t:${joined}:R>)` },
+        { name: `Rollen (${roles.length})`, value: roles.length ? roles.slice(0, 20).join(' ') : 'Geen rollen' }
+      );
     }
+
+    const embed = embeds
+      .custom({
+        title: target.displayName ?? target.username,
+        thumbnail: target.displayAvatarURL({ size: 256 }),
+        fields,
+      });
+
+    await interaction.reply({ embeds: [embed] });
   },
 };

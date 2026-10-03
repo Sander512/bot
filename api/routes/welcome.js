@@ -18,13 +18,13 @@ const DEFAULT_CONFIG = {
   embed_enabled: 1,
   embed_title: 'Welkom op de server!',
   embed_description: '{user} is zojuist lid geworden. We zijn nu met **{membercount}** leden!',
-  embed_color: '10b981',
+  embed_color: '7c5cff',
   embed_image: null,
-  embed_footer: '© Forever Roleplay — All rights reserved',
+  embed_footer: null,
   use_avatar_thumbnail: 1,
   auto_role_id: null,
   dm_enabled: 0,
-  dm_message: 'Welkom bij Forever RP, {username}! Fijn dat je er bent.',
+  dm_message: 'Welkom in de community, {username}! Fijn dat je er bent. 🌙',
 };
 
 const FIELD_MAP = {
@@ -124,7 +124,7 @@ router.post(
 
       if (column === 'embed_color') {
         if (value !== null && !isHexColor(value)) {
-          return res.status(400).json({ error: 'embedColor must be a 6-digit hex color, e.g. 10b981' });
+          return res.status(400).json({ error: 'embedColor must be a 6-digit hex color, e.g. 7c5cff' });
         }
         value = value === null ? DEFAULT_CONFIG.embed_color : normalizeHexColor(value);
       }

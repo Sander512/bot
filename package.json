@@ -1,7 +1,7 @@
 {
-  "name": "foreverrp-integration",
+  "name": "community-bot",
   "version": "1.0.0",
-  "description": "Discord <-> Roblox integration for Forever Roleplay",
+  "description": "Discord bot + dashboard voor een chille community server (moderatie, giveaways, welkomstberichten en fun-commands)",
   "main": "bot/index.js",
   "scripts": {
     "start": "node bot/index.js",

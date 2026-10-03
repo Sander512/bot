@@ -1,6 +1,6 @@
 // api/server.js
-// Forever RP API — Express server.
-// Handles verification, command queue, Roblox polling/heartbeat and server status.
+// Community API — Express server.
+// Powers the dashboard (giveaways, welcome messages) and the bot's data storage.
 
 require('dotenv').config();
 
@@ -8,21 +8,10 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-const verificationRoutes = require('./routes/verification');
-const commandsRoutes = require('./routes/commands');
-const robloxRoutes = require('./routes/roblox');
-const serversRoutes = require('./routes/servers');
-const playersRoutes = require('./routes/players');
-const ticketsRoutes = require('./routes/tickets');
 const giveawaysRoutes = require('./routes/giveaways');
 const welcomeRoutes = require('./routes/welcome');
 const authRoutes = require('./routes/auth');
 const discordGuildsRoutes = require('./routes/discordGuilds');
-const warningsRoutes = require('./routes/warnings');
-const notesRoutes = require('./routes/notes');
-const staffDutyRoutes = require('./routes/staffDuty');
-const whitelistRoutes = require('./routes/whitelist');
-const playerStatsRoutes = require('./routes/playerStats');
 const { initDb } = require('./database');
 const config = require('./config');
 const { requireApiKey } = require('./middleware/auth');
@@ -57,7 +46,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '100kb' }));
 
 // ---- Global rate limiting ----
-// Generous global limit; per-route limits are stricter where it matters (verification).
+// Generous global limit; per-route limits can be stricter where it matters.
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -84,23 +73,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-app.use('/verification', requireApiKey, verificationRoutes);
-app.use('/commands', requireApiKey, commandsRoutes);
-app.use('/roblox', requireApiKey, robloxRoutes);
-app.use('/servers', requireApiKey, serversRoutes);
-app.use('/players', requireApiKey, playersRoutes);
-app.use('/warnings', requireApiKey, warningsRoutes);
-app.use('/notes', requireApiKey, notesRoutes);
-app.use('/staff-duty', requireApiKey, staffDutyRoutes);
-app.use('/whitelist', requireApiKey, whitelistRoutes);
-app.use('/player-stats', requireApiKey, playerStatsRoutes);
-// Ticket routes have mixed auth: bot-only endpoints require X-API-Key,
-// dashboard-facing endpoints accept either X-API-Key or a Discord-login
-// session scoped to that guild — see the per-route middleware inside
-// routes/tickets.js.
-app.use('/tickets', ticketsRoutes);
-
-// Giveaway routes have the same mixed auth as tickets: bot-only endpoints
+// Giveaway routes have mixed auth: bot-only endpoints
 // require X-API-Key, dashboard-facing endpoints also accept a Discord-login
 // session scoped to that guild — see the per-route middleware inside
 // routes/giveaways.js.
@@ -134,13 +107,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Initializes the database and then binds the HTTP server to PORT.
-// Returns a Promise that resolves only once app.listen()'s callback has
-// fired — i.e. once the server is actually accepting connections. This
-// lets start.js (in combined API+bot mode) wait for the API to be ready
-// before logging the Discord bot in, avoiding a race where the bot tries
-// to call the API before it's listening yet.
-async function start() {
+(async () => {
   try {
     await initDb();
     console.log('[API] Database schema geïnitialiseerd.');
@@ -149,21 +116,7 @@ async function start() {
     process.exit(1);
   }
 
-  return new Promise((resolve) => {
-    app.listen(PORT, () => {
-      console.log(`[API] Forever RP API luistert op poort ${PORT}`);
-      resolve();
-    });
+  app.listen(PORT, () => {
+    console.log(`[API] Community API luistert op poort ${PORT}`);
   });
-}
-
-// Wanneer dit bestand direct wordt uitgevoerd (bijv. `node api/server.js`,
-// zoals bij een losse API-only deploy), start meteen zelf op.
-// Wanneer het via require() vanuit start.js wordt geladen (gecombineerde
-// modus), gebeurt dat NIET automatisch — start.js roept dan zelf
-// `await api.start()` aan op het gewenste moment.
-if (require.main === module) {
-  start();
-}
-
-module.exports = { app, start };
+})();

@@ -1,7 +1,7 @@
 // api/middleware/auth.js
 // Two independent ways to authenticate against the API:
 //
-//   1. X-API-Key  — the shared secret the bot (and Roblox) use. Full
+//   1. X-API-Key  — the shared secret the bot uses. Full
 //      access, never seen by a browser.
 //   2. Dashboard session cookie — set after "Login with Discord". Scoped:
 //      it only grants access to the specific guild(s) that Discord user

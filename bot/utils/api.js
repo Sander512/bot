@@ -1,5 +1,5 @@
 // bot/utils/api.js
-// Thin HTTP client the bot uses to talk to the Forever RP API.
+// Thin HTTP client the bot uses to talk to the Community API.
 // Every request is authenticated with X-API-Key.
 
 const config = require('../config');
@@ -51,87 +51,10 @@ async function request(method, path, body) {
 const api = {
   ApiError,
 
-  // ---- Verification ----
-  createVerification: (discordId) =>
-    request('POST', '/verification/create', { discordId }),
-
-  getVerificationByDiscordId: (discordId) =>
-    request('GET', `/verification/${discordId}`),
-
-  getAllVerifications: () => request('GET', '/verification/list'),
-
-  linkDirect: (discordId, robloxId, robloxUsername) =>
-    request('POST', '/verification/link-direct', { discordId, robloxId, robloxUsername }),
-
-  unverify: (discordId, actorDiscordId) =>
-    request('POST', '/verification/unverify', { discordId, actorDiscordId }),
-
-  // ---- Commands (generic queue) ----
-  createCommand: (type, robloxId, payload, createdBy) =>
-    request('POST', '/commands/create', { type, robloxId, payload, createdBy }),
-
-  getCommand: (id) => request('GET', `/commands/${id}`),
-
-  cancelCommand: (id, actorDiscordId) =>
-    request('POST', '/commands/cancel', { id, actorDiscordId }),
-
-  getQueueStatus: () => request('GET', '/commands/queue-status/overview'),
-
-  // ---- Servers ----
-  getOnlineServers: () => request('GET', '/servers/online'),
-
   // ---- Discord guilds (powers the dashboard's "kies een server" screen) ----
   syncDiscordGuilds: (guilds) => request('POST', '/discord-guilds/sync', { guilds }),
   upsertDiscordGuild: (id, name, icon) => request('POST', '/discord-guilds/upsert', { id, name, icon }),
   removeDiscordGuild: (guildId) => request('DELETE', `/discord-guilds/${guildId}`),
-
-  getVerificationByRobloxId: (robloxId) => request('GET', `/verification/by-roblox/${robloxId}`),
-
-  // ---- Players ----
-  getAccountHistory: (robloxId) => request('GET', `/players/${robloxId}/history`),
-
-  // ---- Warnings ----
-  createWarning: (discordId, robloxId, reason, staffId) =>
-    request('POST', '/warnings/create', { discordId, robloxId, reason, staffId }),
-  getWarnings: (discordId) => request('GET', `/warnings/${discordId}`),
-  revokeWarning: (id, actorDiscordId) => request('POST', '/warnings/revoke', { id, actorDiscordId }),
-
-  // ---- Staff notes ----
-  createNote: (discordId, robloxId, note, staffId) =>
-    request('POST', '/notes/create', { discordId, robloxId, note, staffId }),
-  getNotes: (discordId) => request('GET', `/notes/${discordId}`),
-
-  // ---- Whitelist ----
-  addToWhitelist: (robloxId, robloxUsername, discordId, actorDiscordId) =>
-    request('POST', '/whitelist/add', { robloxId, robloxUsername, discordId, actorDiscordId }),
-  removeFromWhitelist: (robloxId, actorDiscordId) =>
-    request('POST', '/whitelist/remove', { robloxId, actorDiscordId }),
-  getWhitelist: () => request('GET', '/whitelist/list'),
-
-  // ---- Staff duty ----
-  getActiveStaffDuty: () => request('GET', '/staff-duty/active'),
-  getStaffDutyLeaderboard: (limit) => request('GET', `/staff-duty/leaderboard${limit ? `?limit=${limit}` : ''}`),
-
-  // ---- Player stats / leaderboard ----
-  getPlayerStats: (robloxId) => request('GET', `/player-stats/${robloxId}`),
-  getStatsLeaderboard: (sort, limit) =>
-    request('GET', `/player-stats/leaderboard/top?sort=${sort || 'cash'}&limit=${limit || 10}`),
-
-  // ---- Ticket panel system ----
-  getTicketConfig: (guildId) => request('GET', `/tickets/config/${guildId}`),
-  updateTicketConfig: (guildId, fields) => request('POST', '/tickets/config', { guildId, ...fields }),
-  listTicketTypes: (guildId) => request('GET', `/tickets/types/${guildId}`),
-  addTicketType: (guildId, type) => request('POST', '/tickets/types', { guildId, ...type }),
-  updateTicketType: (guildId, key, fields) =>
-    request('PATCH', `/tickets/types/${guildId}/${encodeURIComponent(key)}`, fields),
-  removeTicketType: (guildId, key) => request('DELETE', `/tickets/types/${guildId}/${encodeURIComponent(key)}`),
-  createTicketRecord: (data) => request('POST', '/tickets/create', data),
-  getOpenTicketCount: (guildId, openerId, typeKey) =>
-    request('GET', `/tickets/open-count/${guildId}/${openerId}${typeKey ? `?typeKey=${encodeURIComponent(typeKey)}` : ''}`),
-  getTicketByChannel: (channelId) => request('GET', `/tickets/by-channel/${channelId}`),
-  listTickets: (guildId, status) => request('GET', `/tickets/list/${guildId}${status ? `?status=${status}` : ''}`),
-  claimTicket: (channelId, claimedBy) => request('POST', '/tickets/claim', { channelId, claimedBy }),
-  closeTicket: (channelId, closedBy, reason) => request('POST', '/tickets/close', { channelId, closedBy, reason }),
 
   // ---- Welcome messages ----
   getWelcomeConfig: (guildId) => request('GET', `/welcome/config/${guildId}`),
@@ -145,23 +68,6 @@ const api = {
   endGiveaway: (id, winners) => request('POST', '/giveaways/end', { id, winners }),
   rerollGiveaway: (id, winners) => request('POST', '/giveaways/reroll', { id, winners }),
   cancelGiveaway: (id) => request('POST', '/giveaways/cancel', { id }),
-
-  /**
-   * Poll a command until it reaches a terminal status (completed/failed/expired)
-   * or the timeout is hit. Used for "read-back" commands like /checkgeld where
-   * the reply needs the actual result Roblox sends back, not just "queued".
-   */
-  async waitForCommandResult(id, timeoutMs = 8000, intervalMs = 700) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      const command = await api.getCommand(id);
-      if (['completed', 'failed', 'expired'].includes(command.status)) {
-        return command;
-      }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-    return null; // timed out, still pending/processing
-  },
 };
 
 module.exports = api;

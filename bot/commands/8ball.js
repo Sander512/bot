@@ -1,5 +1,5 @@
 // bot/commands/8ball.js
-// Pure Discord command — geen koppeling met Roblox/de API, gewoon voor de lol.
+// Pure Discord command — gewoon voor de lol.
 
 const { SlashCommandBuilder } = require('discord.js');
 const embeds = require('../utils/embeds');

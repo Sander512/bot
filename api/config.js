@@ -10,7 +10,7 @@ require('dotenv').config();
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
 const config = {
-  // Shared secret the bot (and Roblox) use to talk to the API — never
+  // Shared secret the bot uses to talk to the API — never
   // exposed to the browser.
   apiKey: process.env.API_KEY,
 
